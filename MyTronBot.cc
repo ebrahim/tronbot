@@ -9,76 +9,101 @@
 #include <ctime>
 #include <cstdio>
 
-int vertical(const Map& map, int fallback)
+class LongestPath
 {
-	if (map.is_wall(NORTH) && map.is_wall(SOUTH))
-		return fallback;
-	if (map.is_wall(NORTH) && !map.is_wall(SOUTH))
-		return SOUTH;
-	if (map.is_wall(SOUTH) && !map.is_wall(NORTH))
-		return NORTH;
-	int x = map.my_x();
-	int north = 0;
-	int south = 0;
-	for (int y = map.my_y() - 1; !map.is_wall(x, y); --y)
+public:
+	enum { MAX_DEPTH = 16384 };
+
+	LongestPath(const Map& map)
+	: width(map.width)
+	, height(map.height)
+	, x(map.my_x())
+	, y(map.my_y())
 	{
-		++north;
-		if (!map.is_wall(x - 1, y))
-			++south;
-		if (!map.is_wall(x + 1, y))
-			++south;
+		for (int x = 0; x < width; ++x)
+			for (int y = 0; y < height; ++y)
+			{
+				d[x][y] = map.is_wall(x, y) ? -1 : 0;
+				saw[x][y] = false;
+			}
+		d[map.opponent_x()][map.opponent_y()] = -1;
 	}
-	for (int y = map.my_y() + 1; !map.is_wall(x, y); ++y)
+
+	int get_d(int xx, int yy)
 	{
-		++south;
-		if (!map.is_wall(x - 1, y))
-			++north;
-		if (!map.is_wall(x + 1, y))
-			++north;
+		if (xx < 0 || yy < 0 || xx >= width || yy >= height)
+			return -1;
+		return d[xx][yy];
 	}
-	if (north < south)
-		return NORTH;
-	else
-		return SOUTH;
-}
+
+	void set_d(int xx, int yy, int value)
+	{
+		if (xx < 0 || yy < 0 || xx >= width || yy >= height || d[xx][yy] < 0)
+			return;
+		d[xx][yy] = value;
+	}
+
+	int run()
+	{
+		saw[x][y] = true;
+		int res = run(0, std::string("/"));
+		//fprintf(stderr, "res: %d\n", res);
+		return res;
+	}
+
+	int run(int depth, std::string path)
+	{
+		static int x_diff[4] = { 0, 1, 0, -1 };
+		static int y_diff[4] = { -1, 0, 1, 0 };
+		//fprintf(stderr, "(%d, %d)\t%s\n", x, y, path.c_str());
+		int me = get_d(x, y);
+		if (me < 0 || depth >= MAX_DEPTH)		// If wall
+			return -1;
+		//fputs("salam\n", stderr);
+		int x_save = x;
+		int y_save = y;
+		int max_child_path = me;
+		int max_neighbor = -1;
+		for (int neighbor = 0; neighbor <= 3; ++neighbor)
+		{
+			x = x_save + x_diff[neighbor];
+			y = y_save + y_diff[neighbor];
+			int that = get_d(x, y);
+			if (me + 1 > that && that >= 0 && !saw[x][y])
+			{
+				set_d(x, y, me + 1);
+				saw[x][y] = true;
+				int this_max_child = run(depth + 1, (path + (char) (neighbor + '0')) + '/');
+				//fprintf(stderr, "this max: %d\n", this_max_child);
+				saw[x][y] = false;
+				if (this_max_child > max_child_path)
+				{
+					max_child_path = this_max_child;
+					max_neighbor = neighbor;
+				}
+			}
+		}
+		x = x_save;
+		y = y_save;
+		go = max_neighbor;
+		return max_child_path;
+	}
+
+	int d[MAX][MAX];
+	bool saw[MAX][MAX];
+	int width;
+	int height;
+	int x;
+	int y;
+	int go;
+};
 
 int make_move(const Map& map)
 {
-	static int walling = 0;
-	if (walling && !map.is_wall(walling))
-		return walling;
-	else
-		walling = 0;
-	int space[MAX] = { 0 };
-	for (int col = 0; col < map.width; ++col)
-		for (int row = 0; row < map.height; ++row)
-			space[col] += map.is_wall(col, row) ? 0 : 1;
-	for (int col = 1; col < map.width; ++col)
-		space[col] += space[col - 1];
-	int target_col;
-	for (target_col = 0; target_col < map.width; ++target_col)
-		if (space[target_col] > space[map.width - 1] / 2)
-			break;
-	int x = map.my_x();
-	int y = map.my_y();
-	if (map.opponent_x() > x)
-		++target_col;
-	if (x < target_col)
-	{
-		if (!map.is_wall(EAST))
-			return EAST;
-		return vertical(map, WEST);
-	}
-	if (x > target_col)
-	{
-		if (!map.is_wall(WEST))
-			return WEST;
-		return vertical(map, EAST);
-	}
-	int move = vertical(map, map.opponent_x() < x && !map.is_wall(EAST) || map.is_wall(WEST) ? EAST : WEST);
-	if (move == NORTH || move == SOUTH)
-		walling = move;
-	return move;
+	LongestPath lp(map);
+	if (lp.run())
+		return lp.go + 1;
+	return 0;
 }
 
 // Ignore this function. It is just handling boring stuff for you, like
