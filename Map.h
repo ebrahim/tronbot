@@ -41,6 +41,9 @@ public:
 	// Am I stuck?
 	bool stuck() const;
 
+	// Distance of enemies
+	int distance() const;
+
 	// Map dimensions.
 	int width, height;
 

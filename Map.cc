@@ -137,3 +137,18 @@ bool Map::stuck() const
 {
 	return is_wall(NORTH) && is_wall(EAST) && is_wall(SOUTH) && is_wall(WEST);
 }
+
+int Map::distance() const
+{
+	int x1 = player_one_x;
+	int x2 = player_two_x;
+	int y1 = player_one_y;
+	int y2 = player_two_y;
+	int x_diff = x2 - x1;
+	int y_diff = y2 - y1;
+	if (x_diff < 0)
+		x_diff = -x_diff;
+	if (y_diff < 0)
+		y_diff = -y_diff;
+	return std::min(x_diff, y_diff);
+}
