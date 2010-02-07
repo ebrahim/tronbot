@@ -9,6 +9,8 @@
 #include <ctime>
 #include <cstdio>
 
+#define MAX_FEAR 2
+
 class LongestPath
 {
 public:
@@ -46,9 +48,14 @@ public:
 
 	int run(int fear = 0)
 	{
-		for (int xx = -fear; xx <= fear; ++xx)
-			for (int yy = -fear; yy <= fear; ++yy)
-				set_d(enemy_x + xx, enemy_y + yy, -1);
+		for (int x_diff = -fear; x_diff <= fear; ++x_diff)
+			for (int y_diff = -fear; y_diff <= fear; ++y_diff)
+			{
+				int xx = enemy_x + x_diff;
+				int yy = enemy_y + y_diff;
+				if (xx != x || yy != y)
+					set_d(xx, yy, -1);
+			}
 		saw[x][y] = true;
 		int res = run(0, std::string("/"));
 		//fprintf(stderr, "res: %d\n", res);
@@ -106,12 +113,12 @@ public:
 
 int make_move(const Map& map)
 {
-	LongestPath lp0(map);
-	LongestPath lp1(map);
-	if (lp1.run(1) > 0)
-		return lp1.go + 1;
-	if (lp0.run() > 0)
-		return lp0.go + 1;
+	for (int fear = MAX_FEAR; fear >= 0; --fear)
+	{
+		LongestPath lp(map);
+		if (lp.run(fear) > 0)
+			return lp.go + 1;
+	}
 	return NORTH;
 }
 
