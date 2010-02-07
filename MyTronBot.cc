@@ -9,7 +9,7 @@
 #include <ctime>
 #include <cstdio>
 
-#define MAX_FEAR 2
+#define FEAR_BASE 1
 
 class LongestPath
 {
@@ -113,7 +113,7 @@ public:
 
 int make_move(const Map& map)
 {
-	for (int fear = MAX_FEAR + map.distance() / 8; fear >= 0; --fear)
+	for (int fear = FEAR_BASE + map.distance() / 8; fear >= 0; --fear)
 	{
 		LongestPath lp(map);
 		if (lp.run(fear) > 0)
