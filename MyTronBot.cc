@@ -113,7 +113,7 @@ public:
 
 int make_move(const Map& map)
 {
-	for (int fear = MAX_FEAR; fear >= 0; --fear)
+	for (int fear = MAX_FEAR + map.distance() / 8; fear >= 0; --fear)
 	{
 		LongestPath lp(map);
 		if (lp.run(fear) > 0)

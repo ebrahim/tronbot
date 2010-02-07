@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <cmath>
 
 Map::Map()
 {
@@ -150,5 +151,5 @@ int Map::distance() const
 		x_diff = -x_diff;
 	if (y_diff < 0)
 		y_diff = -y_diff;
-	return std::min(x_diff, y_diff);
+	return sqrt(x_diff * x_diff + y_diff * y_diff);
 }
