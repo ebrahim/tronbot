@@ -19,6 +19,8 @@ public:
 	, height(map.height)
 	, x(map.my_x())
 	, y(map.my_y())
+	, enemy_x(map.opponent_x())
+	, enemy_y(map.opponent_y())
 	{
 		for (int x = 0; x < width; ++x)
 			for (int y = 0; y < height; ++y)
@@ -26,7 +28,6 @@ public:
 				d[x][y] = map.is_wall(x, y) ? -1 : 0;
 				saw[x][y] = false;
 			}
-		d[map.opponent_x()][map.opponent_y()] = -1;
 	}
 
 	int get_d(int xx, int yy)
@@ -43,8 +44,11 @@ public:
 		d[xx][yy] = value;
 	}
 
-	int run()
+	int run(int fear = 0)
 	{
+		for (int xx = -fear; xx <= fear; ++xx)
+			for (int yy = -fear; yy <= fear; ++yy)
+				set_d(enemy_x + xx, enemy_y + yy, -1);
 		saw[x][y] = true;
 		int res = run(0, std::string("/"));
 		//fprintf(stderr, "res: %d\n", res);
@@ -95,15 +99,20 @@ public:
 	int height;
 	int x;
 	int y;
+	int enemy_x;
+	int enemy_y;
 	int go;
 };
 
 int make_move(const Map& map)
 {
-	LongestPath lp(map);
-	if (lp.run())
-		return lp.go + 1;
-	return 0;
+	LongestPath lp0(map);
+	LongestPath lp1(map);
+	if (lp1.run(1) > 0)
+		return lp1.go + 1;
+	if (lp0.run() > 0)
+		return lp0.go + 1;
+	return NORTH;
 }
 
 // Ignore this function. It is just handling boring stuff for you, like
