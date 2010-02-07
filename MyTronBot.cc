@@ -9,8 +9,46 @@
 #include <ctime>
 #include <cstdio>
 
+int vertical(const Map& map, int fallback)
+{
+	if (map.is_wall(NORTH) && map.is_wall(SOUTH))
+		return fallback;
+	if (map.is_wall(NORTH) && !map.is_wall(SOUTH))
+		return SOUTH;
+	if (map.is_wall(SOUTH) && !map.is_wall(NORTH))
+		return NORTH;
+	int x = map.my_x();
+	int north = 0;
+	int south = 0;
+	for (int y = map.my_y() - 1; !map.is_wall(x, y); --y)
+	{
+		++north;
+		if (!map.is_wall(x - 1, y))
+			++south;
+		if (!map.is_wall(x + 1, y))
+			++south;
+	}
+	for (int y = map.my_y() + 1; !map.is_wall(x, y); ++y)
+	{
+		++south;
+		if (!map.is_wall(x - 1, y))
+			++north;
+		if (!map.is_wall(x + 1, y))
+			++north;
+	}
+	if (north < south)
+		return NORTH;
+	else
+		return SOUTH;
+}
+
 int make_move(const Map& map)
 {
+	static int walling = 0;
+	if (walling && !map.is_wall(walling))
+		return walling;
+	else
+		walling = 0;
 	int space[MAX] = { 0 };
 	for (int col = 0; col < map.width; ++col)
 		for (int row = 0; row < map.height; ++row)
@@ -21,42 +59,26 @@ int make_move(const Map& map)
 	for (target_col = 0; target_col < map.width; ++target_col)
 		if (space[target_col] > space[map.width - 1] / 2)
 			break;
-	++target_col;
 	int x = map.my_x();
 	int y = map.my_y();
-	int direction = x < target_col ? EAST : x > target_col ? WEST : SOUTH;
-	bool can[4] = { 0 };
-	for (int i = 1; i < 5; ++i)
-		can[i] = !map.is_wall(i);
-	switch (direction)
+	if (map.opponent_x() > x)
+		++target_col;
+	if (x < target_col)
 	{
-		case EAST:
-			if (can[EAST])
-				return EAST;
-			if (can[SOUTH])
-				return SOUTH;
-			if (can[NORTH])
-				return NORTH;
-			return WEST;
-		case WEST:
-			if (can[WEST])
-				return WEST;
-			if (can[SOUTH])
-				return SOUTH;
-			if (can[NORTH])
-				return NORTH;
+		if (!map.is_wall(EAST))
 			return EAST;
-		case SOUTH:
-			if (can[SOUTH])
-				return SOUTH;
-			if (can[NORTH])
-				return NORTH;
-			if (map.opponent_x() < x && can[EAST] || !can[WEST])
-				return EAST;
-			else
-				return WEST;
+		return vertical(map, WEST);
 	}
-	return NORTH;
+	if (x > target_col)
+	{
+		if (!map.is_wall(WEST))
+			return WEST;
+		return vertical(map, EAST);
+	}
+	int move = vertical(map, map.opponent_x() < x && !map.is_wall(EAST) || map.is_wall(WEST) ? EAST : WEST);
+	if (move == NORTH || move == SOUTH)
+		walling = move;
+	return move;
 }
 
 // Ignore this function. It is just handling boring stuff for you, like
