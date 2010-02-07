@@ -21,9 +21,10 @@ int make_move(const Map& map)
 	for (target_col = 0; target_col < map.width; ++target_col)
 		if (space[target_col] > space[map.width - 1] / 2)
 			break;
-	++target_col;
 	int x = map.my_x();
 	int y = map.my_y();
+	if (map.opponent_x() > x)
+		++target_col;
 	int direction = x < target_col ? EAST : x > target_col ? WEST : SOUTH;
 	bool can[4] = { 0 };
 	for (int i = 1; i < 5; ++i)
