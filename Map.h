@@ -17,16 +17,11 @@ public:
 	// (stdin).
 	Map();
 
-	// Returns the width of the Tron map.
-	int width() const;
-
-	// Returns the height of the Tron map.
-	int height() const;
-
 	// Returns whether or not the given cell is a wall or not. TRUE means it's
 	// a wall, FALSE means it's not a wall, and is passable. Any spaces that are
 	// not on the board are deemed to be walls.
 	bool is_wall(int x, int y) const;
+	bool is_wall(int move) const;
 
 	// Get my X and Y position. These are zero-based.
 	int my_x() const;
@@ -42,6 +37,12 @@ public:
 	//   * 3 -- South. Positive X direction.
 	//   * 4 -- West. Negative X direction.
 	static void make_move(int move);
+
+	// Am I stuck?
+	bool stuck() const;
+
+	// Map dimensions.
+	int width, height;
 
 private:
 	// Load a board from an open file handle. To read from the console, pass
@@ -71,7 +72,4 @@ private:
 	// The locations of both players.
 	int player_one_x, player_one_y;
 	int player_two_x, player_two_y;
-
-	// Map dimensions.
-	int map_width, map_height;
 };
