@@ -9,7 +9,7 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 1
+#define FEAR_BASE 2
 
 class LongestPath
 {
@@ -24,12 +24,13 @@ public:
 	, enemy_x(map.opponent_x())
 	, enemy_y(map.opponent_y())
 	{
-		for (int x = 0; x < width; ++x)
-			for (int y = 0; y < height; ++y)
+		for (int xx = 0; xx < width; ++xx)
+			for (int yy = 0; yy < height; ++yy)
 			{
-				d[x][y] = map.is_wall(x, y) ? -1 : 0;
-				saw[x][y] = false;
+				d[xx][yy] = map.is_wall(xx, yy) ? -1 : 0;
+				saw[xx][yy] = false;
 			}
+		d[enemy_x][enemy_y] = -1;
 	}
 
 	int get_d(int xx, int yy)
@@ -48,29 +49,40 @@ public:
 
 	int run(int fear = 0)
 	{
-		for (int x_diff = -fear; x_diff <= fear; ++x_diff)
-			for (int y_diff = -fear; y_diff <= fear; ++y_diff)
+		for (int diff = 0; diff <= fear; ++diff)
+			for (int x_diff = 0; x_diff <= diff; ++x_diff)
 			{
-				int xx = enemy_x + x_diff;
-				int yy = enemy_y + y_diff;
-				if (xx != x || yy != y)
-					set_d(xx, yy, -1);
+				int y_diff = diff - x_diff;
+				set_d(enemy_x + x_diff, enemy_y + y_diff, -2);		// Mark for growing
+				set_d(enemy_x - x_diff, enemy_y + y_diff, -2);		// Mark for growing
+				set_d(enemy_x + x_diff, enemy_y - y_diff, -2);		// Mark for growing
+				set_d(enemy_x - x_diff, enemy_y - y_diff, -2);		// Mark for growing
 			}
-		saw[x][y] = true;
-		int res = run(0, std::string("/"));
-		//fprintf(stderr, "res: %d\n", res);
+		for (int xx = 0; xx < width; ++xx)
+			for (int yy = 0; yy < height; ++yy)
+				if (d[xx][yy] == -2)
+					d[xx][yy] = -1;		// Grow marked ones
+		d[x][y] = 0;		// Clear self wall if any
+#if 0
+		for (int yy = 0; yy < height; ++yy)
+		{
+			for (int xx = 0; xx < width; ++xx)
+				putc(d[xx][yy] ? '+' : ' ', stderr);
+			putc('\n', stderr);
+		}
+#endif
+		saw[x][y] = true;		// Already seen self!
+		int res = deepen(0);
 		return res;
 	}
 
-	int run(int depth, std::string path)
+	int deepen(int depth)
 	{
 		static int x_diff[4] = { 0, 1, 0, -1 };
 		static int y_diff[4] = { -1, 0, 1, 0 };
-		//fprintf(stderr, "(%d, %d)\t%s\n", x, y, path.c_str());
 		int me = get_d(x, y);
-		if (me < 0 || depth >= MAX_DEPTH)		// If wall
+		if (me < 0 || depth >= MAX_DEPTH)		// If wall, or max depth
 			return -1;
-		//fputs("salam\n", stderr);
 		int x_save = x;
 		int y_save = y;
 		int max_child_path = me;
@@ -84,8 +96,7 @@ public:
 			{
 				set_d(x, y, me + 1);
 				saw[x][y] = true;
-				int this_max_child = run(depth + 1, (path + (char) (neighbor + '0')) + '/');
-				//fprintf(stderr, "this max: %d\n", this_max_child);
+				int this_max_child = deepen(depth + 1);
 				saw[x][y] = false;
 				if (this_max_child > max_child_path)
 				{
@@ -113,7 +124,7 @@ public:
 
 int make_move(const Map& map)
 {
-	for (int fear = FEAR_BASE + map.distance() / 8; fear >= 0; --fear)
+	for (int fear = FEAR_BASE; fear >= 0; --fear)
 	{
 		LongestPath lp(map);
 		if (lp.run(fear) > 0)
