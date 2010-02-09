@@ -9,9 +9,7 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 2
-#define FEAR_FACTOR_1 3
-#define FEAR_FACTOR_2 2
+#define FEAR_BASE 4
 
 class LongestPath
 {
@@ -130,12 +128,12 @@ int make_move(const Map& map)
 	int moves[FEAR_BASE + 1];
 	int scores_sum = 0;
 	int scores_div = 0;
-	for (int fear = FEAR_BASE; fear >= 0; --fear)
+	for (int fear = 0; fear <= FEAR_BASE; ++fear)
 	{
 		LongestPath lp(map);
 		scores[fear] = lp.run(fear);
-		scores_sum = FEAR_FACTOR_1 * scores_sum + FEAR_FACTOR_2 * scores[fear];
-		scores_div = FEAR_FACTOR_1 * scores_div + FEAR_FACTOR_2;
+		scores_sum = fear * scores_sum + scores[fear];
+		scores_div = fear * scores_div + 1;
 		moves[fear] = lp.go + 1;
 		//fprintf(stderr, "%d %d\n", scores[fear], moves[fear]);
 	}
