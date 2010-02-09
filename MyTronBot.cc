@@ -147,7 +147,7 @@ int make_move(const Map& map)
 			diff = -diff;
 		if (diff < min_value)
 		{
-			diff = min_value;
+			min_value = diff;
 			min_index = i;
 		}
 	}
