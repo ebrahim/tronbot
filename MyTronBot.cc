@@ -9,7 +9,7 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 2
+#define FEAR_BASE 1
 
 class LongestPath
 {
@@ -124,13 +124,20 @@ public:
 
 int make_move(const Map& map)
 {
+	int max_score = 0;
+	int move = NORTH;
 	for (int fear = FEAR_BASE; fear >= 0; --fear)
 	{
 		LongestPath lp(map);
-		if (lp.run(fear) > 0)
-			return lp.go + 1;
+		int score = lp.run(fear);
+		score -= score / fear;
+		if (score > max_score)
+		{
+			max_score = score;
+			move = lp.go + 1;
+		}
 	}
-	return NORTH;
+	return move;
 }
 
 // Ignore this function. It is just handling boring stuff for you, like
