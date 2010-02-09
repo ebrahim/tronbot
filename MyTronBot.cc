@@ -10,7 +10,8 @@
 #include <cstdio>
 
 #define FEAR_BASE 2
-#define FEAR_FACTOR 2
+#define FEAR_FACTOR_1 3
+#define FEAR_FACTOR_2 2
 
 class LongestPath
 {
@@ -129,15 +130,17 @@ int make_move(const Map& map)
 	int moves[FEAR_BASE + 1];
 	int scores_sum = 0;
 	int scores_div = 0;
-	for (int fear = 0; fear <= FEAR_BASE; ++fear)
+	for (int fear = FEAR_BASE; fear >= 0; --fear)
 	{
 		LongestPath lp(map);
 		scores[fear] = lp.run(fear);
-		scores_sum = FEAR_FACTOR * scores_sum + scores[fear];
-		scores_div = FEAR_FACTOR * scores_div + 1;
+		scores_sum = FEAR_FACTOR_1 * scores_sum + FEAR_FACTOR_2 * scores[fear];
+		scores_div = FEAR_FACTOR_1 * scores_div + FEAR_FACTOR_2;
 		moves[fear] = lp.go + 1;
+		//fprintf(stderr, "%d %d\n", scores[fear], moves[fear]);
 	}
 	int target_score = scores_sum / scores_div;
+	//fprintf(stderr, "%d / %d = %d\n", scores_sum, scores_div, target_score);
 	int min_value = LongestPath::MAX_DEPTH;
 	int min_index = -1;
 	for (int i = 0; i <= FEAR_BASE && scores[i] > 0; ++i)
@@ -145,7 +148,8 @@ int make_move(const Map& map)
 		int diff = scores[i] - target_score;
 		if (diff < 0)
 			diff = -diff;
-		if (diff < min_value)
+		//fprintf(stderr, "%d %d %d %d %d\n", i, scores[i], target_score, diff, min_value);
+		if (diff <= min_value)
 		{
 			min_value = diff;
 			min_index = i;
