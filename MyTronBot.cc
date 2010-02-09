@@ -10,6 +10,7 @@
 #include <cstdio>
 
 #define FEAR_BASE 1
+#define FEAR_PROB 4
 
 class LongestPath
 {
@@ -130,7 +131,7 @@ int make_move(const Map& map)
 	{
 		LongestPath lp(map);
 		int score = lp.run(fear);
-		score -= score / (FEAR_BASE - fear + 1);
+		score -= score / (FEAR_PROB * (FEAR_BASE - fear + 1));
 		if (score > max_score)
 		{
 			max_score = score;
