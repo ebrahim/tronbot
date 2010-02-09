@@ -130,7 +130,7 @@ int make_move(const Map& map)
 	{
 		LongestPath lp(map);
 		int score = lp.run(fear);
-		score -= score / (fear + 1);
+		score -= score / (FEAR_BASE - fear + 1);
 		if (score > max_score)
 		{
 			max_score = score;
