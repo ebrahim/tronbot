@@ -9,8 +9,8 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 1
-#define FEAR_PROB 4
+#define FEAR_BASE 3
+#define FEAR_FACTOR 2
 
 class LongestPath
 {
@@ -125,20 +125,33 @@ public:
 
 int make_move(const Map& map)
 {
-	int max_score = 0;
-	int move = NORTH;
-	for (int fear = FEAR_BASE; fear >= 0; --fear)
+	int scores[FEAR_BASE + 1];
+	int moves[FEAR_BASE + 1];
+	int scores_sum = 0;
+	int scores_div = 0;
+	for (int fear = 0; fear <= FEAR_BASE; ++fear)
 	{
 		LongestPath lp(map);
-		int score = lp.run(fear);
-		score -= score / (FEAR_PROB * (FEAR_BASE - fear + 1));
-		if (score > max_score)
+		scores[fear] = lp.run(fear);
+		scores_sum = FEAR_FACTOR * scores_sum + scores[fear];
+		scores_div = FEAR_FACTOR * scores_div + 1;
+		moves[fear] = lp.go + 1;
+	}
+	int target_score = scores_sum / scores_div;
+	int min_value = LongestPath::MAX_DEPTH;
+	int min_index = -1;
+	for (int i = 0; i <= FEAR_BASE && scores[i] > 0; ++i)
+	{
+		int diff = scores[i] - target_score;
+		if (diff < 0)
+			diff = -diff;
+		if (diff <= min_value)
 		{
-			max_score = score;
-			move = lp.go + 1;
+			diff = min_value;
+			min_index = i;
 		}
 	}
-	return move;
+	return min_index < 0 ? NORTH : moves[min_index];
 }
 
 // Ignore this function. It is just handling boring stuff for you, like
