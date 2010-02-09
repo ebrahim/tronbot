@@ -9,7 +9,7 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 3
+#define FEAR_BASE 2
 #define FEAR_FACTOR 2
 
 class LongestPath
@@ -145,7 +145,7 @@ int make_move(const Map& map)
 		int diff = scores[i] - target_score;
 		if (diff < 0)
 			diff = -diff;
-		if (diff <= min_value)
+		if (diff < min_value)
 		{
 			diff = min_value;
 			min_index = i;
