@@ -9,7 +9,10 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 4
+#define FEAR_BASE 2
+
+static int x_diff[4] = { 0, 1, 0, -1 };
+static int y_diff[4] = { -1, 0, 1, 0 };
 
 class LongestPath
 {
@@ -23,105 +26,156 @@ public:
 	, y(map.my_y())
 	, enemy_x(map.opponent_x())
 	, enemy_y(map.opponent_y())
+	, max_neighbor(-1)
 	{
 		for (int xx = 0; xx < width; ++xx)
 			for (int yy = 0; yy < height; ++yy)
-			{
-				d[xx][yy] = map.is_wall(xx, yy) ? -1 : 0;
-				saw[xx][yy] = false;
-			}
-		d[enemy_x][enemy_y] = -1;
+				wall[xx][yy] = map.is_wall(xx, yy);
 	}
 
-	int get_d(int xx, int yy)
+	bool is_wall(int xx, int yy)
 	{
 		if (xx < 0 || yy < 0 || xx >= width || yy >= height)
-			return -1;
-		return d[xx][yy];
+			return true;
+		return wall[xx][yy];
 	}
 
-	void set_d(int xx, int yy, int value)
+	void set_wall(int xx, int yy, bool value)
 	{
-		if (xx < 0 || yy < 0 || xx >= width || yy >= height || d[xx][yy] < 0)
+		if (xx < 0 || yy < 0 || xx >= width || yy >= height)
 			return;
-		d[xx][yy] = value;
+		wall[xx][yy] = value;
+	}
+
+	int reachables(int xx, int yy)
+	{
+		static bool reached[MAX][MAX];
+		struct Pos
+		{
+			Pos()
+			{
+			}
+
+			Pos(int x, int y)
+			: x(x)
+			, y(y)
+			{
+			}
+
+			int x, y;
+		};
+		static Pos neighbors[MAX * MAX];
+		if (is_wall(xx, yy))
+			return 0;
+		for (int x = 0; x < width; ++x)
+			for (int y = 0; y < height; ++y)
+				reached[x][y] = false;
+		int tail = 0;
+		int head = 0;
+		reached[xx][yy] = true;
+		neighbors[tail++] = Pos(xx, yy);
+		int count = 1;
+		do
+		{
+			int x = neighbors[head].x;
+			int y = neighbors[head].y;
+			for (int diff = 0; diff < 4; ++diff)
+			{
+				int xx = x + x_diff[diff];
+				int yy = y + y_diff[diff];
+				if (!is_wall(xx, yy) && !reached[xx][yy])
+				{
+					reached[xx][yy] = true;
+					neighbors[tail++] = Pos(xx, yy);
+					++count;
+				}
+			}
+			++head;		// Pop
+		} while (head != tail);
+		return count;
 	}
 
 	int run(int fear = 0)
 	{
 		for (int diff = 0; diff <= fear; ++diff)
-			for (int x_diff = 0; x_diff <= diff; ++x_diff)
+			for (int dx = 0; dx <= diff; ++dx)
 			{
-				int y_diff = diff - x_diff;
-				set_d(enemy_x + x_diff, enemy_y + y_diff, -2);		// Mark for growing
-				set_d(enemy_x - x_diff, enemy_y + y_diff, -2);		// Mark for growing
-				set_d(enemy_x + x_diff, enemy_y - y_diff, -2);		// Mark for growing
-				set_d(enemy_x - x_diff, enemy_y - y_diff, -2);		// Mark for growing
+				int dy = diff - dx;
+				set_wall(enemy_x + dx, enemy_y + dy, true);
+				set_wall(enemy_x - dx, enemy_y + dy, true);
+				set_wall(enemy_x + dx, enemy_y - dy, true);
+				set_wall(enemy_x - dx, enemy_y - dy, true);
 			}
-		for (int xx = 0; xx < width; ++xx)
-			for (int yy = 0; yy < height; ++yy)
-				if (d[xx][yy] == -2)
-					d[xx][yy] = -1;		// Grow marked ones
-		d[x][y] = 0;		// Clear self wall if any
+		wall[x][y] = 0;		// Clear self wall if any
 #if 0
 		for (int yy = 0; yy < height; ++yy)
 		{
 			for (int xx = 0; xx < width; ++xx)
-				putc(d[xx][yy] ? '+' : ' ', stderr);
+				putc(wall[xx][yy] ? '+' : ' ', stderr);
 			putc('\n', stderr);
 		}
 #endif
-		saw[x][y] = true;		// Already seen self!
-		int res = deepen(0);
-		return res;
+		return deepen();
 	}
 
-	int deepen(int depth)
+	int deepen(int depth = 0/*, std::string path = std::string("/")*/)
 	{
-		static int x_diff[4] = { 0, 1, 0, -1 };
-		static int y_diff[4] = { -1, 0, 1, 0 };
-		int me = get_d(x, y);
-		if (me < 0 || depth >= MAX_DEPTH)		// If wall, or max depth
+		if (is_wall(x, y))		// If wall
 			return -1;
-		int x_save = x;
-		int y_save = y;
-		int max_child_path = me;
-		int max_neighbor = -1;
-		for (int neighbor = 0; neighbor <= 3; ++neighbor)
+		if (depth >= MAX_DEPTH)		// If reached max depth
+			return depth;
+		wall[x][y] = true;
+#if 0
+		fprintf(stderr, "%s\n", path.c_str());
+		for (int yy = 0; yy < height; ++yy)
 		{
-			x = x_save + x_diff[neighbor];
-			y = y_save + y_diff[neighbor];
-			int that = get_d(x, y);
-			if (me + 1 > that && that >= 0 && !saw[x][y])
+			for (int xx = 0; xx < width; ++xx)
+				putc(x == xx && y == yy ? '.' : wall[xx][yy] ? '+' : ' ', stderr);
+			putc('\n', stderr);
+		}
+		fputs("-------------------------------\n", stderr);
+#endif
+		int max_neighbor_area = -1;
+		int my_max_neighbor = -1;
+		// Pick and deepen only one neighbor based on visiting which neighbor leads into a bigger neighbor connected area
+		for (int neighbor = 0; neighbor < 4; ++neighbor)
+		{
+			int xx = x + x_diff[neighbor];
+			int yy = y + y_diff[neighbor];
+			if (is_wall(xx, yy))
+				continue;
+			wall[xx][yy] = true;
+			for (int diff = 0; diff < 4; ++diff)
 			{
-				set_d(x, y, me + 1);
-				saw[x][y] = true;
-				int this_max_child = deepen(depth + 1);
-				saw[x][y] = false;
-				if (this_max_child > max_child_path)
+				int this_neighbor_area = reachables(xx + x_diff[diff], yy + y_diff[diff]);
+				//fprintf(stderr, "%d [%d,%d] %d\n", neighbor, xx + x_diff[diff], yy + y_diff[diff], this_neighbor_area);
+				if (this_neighbor_area > max_neighbor_area)
 				{
-					max_child_path = this_max_child;
-					max_neighbor = neighbor;
+					max_neighbor_area = this_neighbor_area;
+					my_max_neighbor = neighbor;
 				}
 			}
+			wall[xx][yy] = false;
 		}
-		x = x_save;
-		y = y_save;
-		go = max_neighbor;
-		return max_child_path;
+		if (my_max_neighbor < 0)		// If stuck
+			return depth;
+		x += x_diff[my_max_neighbor];
+		y += y_diff[my_max_neighbor];
+		int score = deepen(depth + 1/*, path + ("NESW"[my_max_neighbor]) + "/"*/);
+		max_neighbor = my_max_neighbor;
+		return score;
 	}
 
-	int d[MAX][MAX];
-	bool saw[MAX][MAX];
+	bool wall[MAX][MAX];
 	int width;
 	int height;
 	int x;
 	int y;
 	int enemy_x;
 	int enemy_y;
-	int go;
+	int max_neighbor;
 };
-
+	
 int make_move(const Map& map)
 {
 	int scores[FEAR_BASE + 1];
@@ -132,10 +186,10 @@ int make_move(const Map& map)
 	{
 		LongestPath lp(map);
 		scores[fear] = lp.run(fear);
+		moves[fear] = lp.max_neighbor + 1;
 		scores_sum = fear * scores_sum + scores[fear];
 		scores_div = fear * scores_div + 1;
-		moves[fear] = lp.go + 1;
-		//fprintf(stderr, "%d %d\n", scores[fear], moves[fear]);
+		//fprintf(stderr, "%d: %d %d\n", fear, scores[fear], moves[fear]);
 	}
 	int target_score = scores_sum / scores_div;
 	//fprintf(stderr, "%d / %d = %d\n", scores_sum, scores_div, target_score);
@@ -146,7 +200,7 @@ int make_move(const Map& map)
 		int diff = scores[i] - target_score;
 		if (diff < 0)
 			diff = -diff;
-		//fprintf(stderr, "%d %d %d %d %d\n", i, scores[i], target_score, diff, min_value);
+		//fprintf(stderr, "%d: %d %d %d %d\n", i, scores[i], target_score, diff, min_value);
 		if (diff <= min_value)
 		{
 			min_value = diff;
