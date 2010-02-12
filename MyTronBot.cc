@@ -9,7 +9,8 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 4
+#define INFINITY 16384
+#define FEAR_BASE 2
 #define FEAR_MULT 2
 
 static int x_diff[4] = { 0, 1, 0, -1 };
@@ -67,6 +68,8 @@ public:
 			int x, y, depth;
 		};
 		static Pos neighbors[MAX * MAX];
+		reached_enemy = false;
+		depth = 0;
 		if (is_wall(xx, yy))
 			return 0;
 		for (int x = 0; x < width; ++x)
@@ -124,7 +127,7 @@ public:
 		return deepen();
 	}
 
-	int deepen(int depth = 0/*, std::string path = std::string("/")*/)
+	int deepen(int depth = 0, std::string path = std::string("/"))
 	{
 		if (is_wall(x, y))		// If wall
 			return -1;
@@ -141,9 +144,8 @@ public:
 		}
 		fputs("-------------------------------\n", stderr);
 #endif
-		int max_neighbor_area = -1;
-		int my_max_neighbor = -1;
-		int min_flood_depth = MAX_DEPTH;
+		int max_score = -INFINITY;
+		int max_score_neighbor = -1;
 		// Pick and deepen only one neighbor based on visiting which neighbor leads into a bigger neighbor connected area
 		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
@@ -152,28 +154,42 @@ public:
 			if (is_wall(xx, yy))
 				continue;
 			wall[xx][yy] = true;
+			int max_neighbor_area_me = -INFINITY;
+			int max_neighbor_me = -1;
+			int min_flood_depth_me = INFINITY;
+			int max_neighbor_area_enemy = -INFINITY;
+			bool reached_enemy = false;
 			for (int diff = 0; diff < 4; ++diff)
 			{
 				int flood_depth;
-				bool reached_enemy = false;
-				int this_neighbor_area = reachables(xx + x_diff[diff], yy + y_diff[diff], flood_depth, reached_enemy);
-				//fprintf(stderr, "%d [%d,%d] %d\n", neighbor, xx + x_diff[diff], yy + y_diff[diff], this_neighbor_area);
-				if (this_neighbor_area > max_neighbor_area
-						|| this_neighbor_area == max_neighbor_area && reached_enemy && flood_depth < min_flood_depth)
-				{
-					max_neighbor_area = this_neighbor_area;
-					my_max_neighbor = neighbor;
-					min_flood_depth = flood_depth;
-				}
+				bool reached;
+				int this_neighbor_area = reachables(xx + x_diff[diff], yy + y_diff[diff], flood_depth, reached);
+				reached_enemy = reached_enemy || reached;
+				if (this_neighbor_area > max_neighbor_area_me)
+					max_neighbor_area_me = this_neighbor_area;
+				if (flood_depth && flood_depth < min_flood_depth_me)
+					min_flood_depth_me = flood_depth;
+				this_neighbor_area = reachables(enemy_x + x_diff[diff], enemy_y + y_diff[diff], flood_depth, reached);
+				if (this_neighbor_area > max_neighbor_area_enemy)
+					max_neighbor_area_enemy = this_neighbor_area;
+			}
+			int my_score = max_neighbor_area_me - max_neighbor_area_enemy;
+			if (reached_enemy)
+				my_score -= min_flood_depth_me;
+			//fprintf(stderr, "%d %d %d %d %d %d\n", neighbor, max_neighbor_area_me, max_neighbor_area_enemy, reached_enemy, min_flood_depth_me, my_score);
+			if (my_score > max_score)
+			{
+				max_score = my_score;
+				max_score_neighbor = neighbor;
 			}
 			wall[xx][yy] = false;
 		}
-		if (my_max_neighbor < 0)		// If stuck
+		if (max_score_neighbor < 0)		// If stuck
 			return depth;
-		x += x_diff[my_max_neighbor];
-		y += y_diff[my_max_neighbor];
-		int score = deepen(depth + 1/*, path + ("NESW"[my_max_neighbor]) + "/"*/);
-		max_neighbor = my_max_neighbor;
+		x += x_diff[max_score_neighbor];
+		y += y_diff[max_score_neighbor];
+		int score = deepen(depth + 1, path + ("NESW"[max_score_neighbor]) + "/");
+		max_neighbor = max_score_neighbor;
 		return score;
 	}
 
@@ -204,7 +220,7 @@ int make_move(const Map& map)
 	}
 	int target_score = scores_sum / scores_div;
 	//fprintf(stderr, "%d / %d = %d\n", scores_sum, scores_div, target_score);
-	int min_value = LongestPath::MAX_DEPTH;
+	int min_value = INFINITY;
 	int min_index = -1;
 	for (int i = 0; i <= FEAR_BASE && scores[i] > 0; ++i)
 	{
