@@ -9,7 +9,8 @@
 #include <ctime>
 #include <cstdio>
 
-#define FEAR_BASE 2
+#define FEAR_BASE 4
+#define FEAR_MULT 2
 
 static int x_diff[4] = { 0, 1, 0, -1 };
 static int y_diff[4] = { -1, 0, 1, 0 };
@@ -47,7 +48,7 @@ public:
 		wall[xx][yy] = value;
 	}
 
-	int reachables(int xx, int yy)
+	int reachables(int xx, int yy, int& depth, bool& reached_enemy)
 	{
 		static bool reached[MAX][MAX];
 		struct Pos
@@ -56,13 +57,14 @@ public:
 			{
 			}
 
-			Pos(int x, int y)
+			Pos(int x, int y, int depth)
 			: x(x)
 			, y(y)
+			, depth(depth)
 			{
 			}
 
-			int x, y;
+			int x, y, depth;
 		};
 		static Pos neighbors[MAX * MAX];
 		if (is_wall(xx, yy))
@@ -73,25 +75,29 @@ public:
 		int tail = 0;
 		int head = 0;
 		reached[xx][yy] = true;
-		neighbors[tail++] = Pos(xx, yy);
+		neighbors[tail++] = Pos(xx, yy, 0);
 		int count = 1;
 		do
 		{
 			int x = neighbors[head].x;
 			int y = neighbors[head].y;
+			int d = neighbors[head].depth;
 			for (int diff = 0; diff < 4; ++diff)
 			{
 				int xx = x + x_diff[diff];
 				int yy = y + y_diff[diff];
+				if (xx == enemy_x && yy == enemy_y)
+					reached_enemy = true;
 				if (!is_wall(xx, yy) && !reached[xx][yy])
 				{
 					reached[xx][yy] = true;
-					neighbors[tail++] = Pos(xx, yy);
+					neighbors[tail++] = Pos(xx, yy, d + 1);
 					++count;
 				}
 			}
 			++head;		// Pop
 		} while (head != tail);
+		depth = neighbors[tail - 1].depth;
 		return count;
 	}
 
@@ -137,6 +143,7 @@ public:
 #endif
 		int max_neighbor_area = -1;
 		int my_max_neighbor = -1;
+		int min_flood_depth = MAX_DEPTH;
 		// Pick and deepen only one neighbor based on visiting which neighbor leads into a bigger neighbor connected area
 		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
@@ -147,12 +154,16 @@ public:
 			wall[xx][yy] = true;
 			for (int diff = 0; diff < 4; ++diff)
 			{
-				int this_neighbor_area = reachables(xx + x_diff[diff], yy + y_diff[diff]);
+				int flood_depth;
+				bool reached_enemy = false;
+				int this_neighbor_area = reachables(xx + x_diff[diff], yy + y_diff[diff], flood_depth, reached_enemy);
 				//fprintf(stderr, "%d [%d,%d] %d\n", neighbor, xx + x_diff[diff], yy + y_diff[diff], this_neighbor_area);
-				if (this_neighbor_area > max_neighbor_area)
+				if (this_neighbor_area > max_neighbor_area
+						|| this_neighbor_area == max_neighbor_area && reached_enemy && flood_depth < min_flood_depth)
 				{
 					max_neighbor_area = this_neighbor_area;
 					my_max_neighbor = neighbor;
+					min_flood_depth = flood_depth;
 				}
 			}
 			wall[xx][yy] = false;
@@ -187,8 +198,8 @@ int make_move(const Map& map)
 		LongestPath lp(map);
 		scores[fear] = lp.run(fear);
 		moves[fear] = lp.max_neighbor + 1;
-		scores_sum = fear * scores_sum + scores[fear];
-		scores_div = fear * scores_div + 1;
+		scores_sum = (fear + 1) * scores_sum * FEAR_MULT + scores[fear];
+		scores_div = (fear + 1) * scores_div * FEAR_MULT + 1;
 		//fprintf(stderr, "%d: %d %d\n", fear, scores[fear], moves[fear]);
 	}
 	int target_score = scores_sum / scores_div;
