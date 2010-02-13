@@ -231,6 +231,7 @@ public:
 		int max_neighbor_area_me = -INFINITY;
 		int min_flood_depth_me = INFINITY;
 		int max_neighbor_area_enemy = -INFINITY;
+		int min_flood_depth_enemy = INFINITY;
 		int enemy_distance = INFINITY;
 		for (int diff = 0; diff < 4; ++diff)
 		{
@@ -246,12 +247,19 @@ public:
 			this_neighbor_area = floodfill(enemy_x + x_diff[diff], enemy_y + y_diff[diff], flood_depth, distance);
 			if (this_neighbor_area > max_neighbor_area_enemy)
 				max_neighbor_area_enemy = this_neighbor_area;
+			if (flood_depth && flood_depth < min_flood_depth_enemy)
+				min_flood_depth_enemy = flood_depth;
 		}
 		int score = max_neighbor_area_me - max_neighbor_area_enemy;
 		if (enemy_distance == INFINITY)		// If separated
 			score *= -SCORE_DRAW - 1;
 		else		// If in the same area
+		{
+			score += width + height;		// Prevent preferring collision
+			score -= enemy_distance;		// Prefer near enemy
 			score -= min_flood_depth_me;		// Prefer center
+			score -= min_flood_depth_enemy;		// Prefer enemy at corners
+		}
 		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, min_flood_depth_me, score);
 		return score;
 	}
