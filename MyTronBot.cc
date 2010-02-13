@@ -22,7 +22,7 @@ class AlphaBeta
 {
 public:
 	enum { INFINITY = MAX_SIDE * MAX_SIDE };
-	enum { START_DEPTH = 10 };
+	enum { START_DEPTH = 12 };
 	enum { SCORE_LOSE = -INFINITY + 1 };
 	enum { SCORE_DRAW = -32 };
 	enum { SCORE_WIN = INFINITY - 1 };
@@ -248,7 +248,9 @@ public:
 				max_neighbor_area_enemy = this_neighbor_area;
 		}
 		int score = max_neighbor_area_me - max_neighbor_area_enemy;
-		if (enemy_distance != INFINITY)		// If in the same area
+		if (enemy_distance == INFINITY)		// If separated
+			score *= -SCORE_DRAW - 1;
+		else		// If in the same area
 			score -= min_flood_depth_me;		// Prefer center
 		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, min_flood_depth_me, score);
 		return score;
