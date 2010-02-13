@@ -103,15 +103,13 @@ public:
 		//fprintf(stderr, "Depth: %d, Alpha: %d, Beta: %d\n", depth, alpha, beta);
 		if (depth % 2 == 0)
 		{
-			if (is_wall(x, y) || is_wall(enemy_x, enemy_y) || x == enemy_x && y == enemy_y)		// If search in this branch ended
+			if (is_wall(x, y) || is_wall(enemy_x, enemy_y) || x == enemy_x && y == enemy_y || timed_out)		// If search in this branch ended
 				return evaluate();
 			else if (depth <= 0)
 			{
 				full_search = false;
 				return evaluate();
 			}
-			else if (timed_out)
-				return beta;
 		}
 		wall[x][y] = true;
 #if 0
