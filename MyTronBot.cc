@@ -8,17 +8,23 @@
 #include <cstdlib>
 #include <ctime>
 #include <cstdio>
+#include <signal.h>
+#include <sys/time.h>		// For setitimer
+
+#define TIMEOUT 900000		// usec
 
 static int x_diff[4] = { 0, 1, 0, -1 };
 static int y_diff[4] = { -1, 0, 1, 0 };
+
+static bool timed_out = false;
 
 class AlphaBeta
 {
 public:
 	enum { INFINITY = MAX_SIDE * MAX_SIDE };
-	enum { MAX_DEPTH = 10 };
+	enum { START_DEPTH = 10 };
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -256 };
+	enum { SCORE_DRAW = -32 };
 	enum { SCORE_WIN = INFINITY - 1 };
 
 #if 0
@@ -39,6 +45,7 @@ public:
 	, enemy_x(map.opponent_x())
 	, enemy_y(map.opponent_y())
 	, max_neighbor(0)
+	, full_search(false)
 	{
 		for (int xx = 0; xx < width; ++xx)
 			for (int yy = 0; yy < height; ++yy)
@@ -69,12 +76,43 @@ public:
 		enemy_y = tmp;
 	}
 
-	int alphabeta(int depth = MAX_DEPTH, int alpha = -INFINITY, int beta = INFINITY)
+	int run()
+	{
+#if 0
+		alphabeta(18);
+		return max_neighbor;
+#endif
+		int max_score = -INFINITY;
+		int best_neighbor = -1;
+		full_search = false;
+		for (int depth = START_DEPTH; !timed_out && !full_search; depth += 2)
+		{
+			full_search = true;		// Assume full search, until game tree is cut
+			int alpha = alphabeta(depth);
+			if (alpha > max_score)
+			{
+				max_score = alpha;
+				best_neighbor = max_neighbor;
+			}
+		}
+		return best_neighbor;
+	}
+
+	int alphabeta(int depth, int alpha = -INFINITY, int beta = INFINITY)
 	{
 		//fprintf(stderr, "Depth: %d, Alpha: %d, Beta: %d\n", depth, alpha, beta);
 		if (depth % 2 == 0)
-			if (depth <= 0 || is_wall(x, y) || is_wall(enemy_x, enemy_y) || x == enemy_x && y == enemy_y)		// If search in this branch ended
+		{
+			if (is_wall(x, y) || is_wall(enemy_x, enemy_y) || x == enemy_x && y == enemy_y)		// If search in this branch ended
 				return evaluate();
+			else if (depth <= 0)
+			{
+				full_search = false;
+				return evaluate();
+			}
+			else if (timed_out)
+				return beta;
+		}
 		wall[x][y] = true;
 #if 0
 		Ordering ordering;
@@ -118,7 +156,7 @@ public:
 		return alpha;
 	}
 
-	int floodfill(int xx, int yy, int& depth, bool& reached_enemy)
+	int floodfill(int xx, int yy, int& depth, int& enemy_distance)
 	{
 		struct Pos
 		{
@@ -131,7 +169,7 @@ public:
 		static Pos neighbors[MAX_SIDE * MAX_SIDE];
 
 		depth = 0;
-		reached_enemy = false;
+		enemy_distance = INFINITY;
 		if (is_wall(xx, yy))
 			return 0;
 		for (int x = 0; x < width; ++x)
@@ -151,8 +189,8 @@ public:
 			{
 				int xx = x + x_diff[diff];
 				int yy = y + y_diff[diff];
-				if (xx == enemy_x && yy == enemy_y)
-					reached_enemy = true;
+				if (xx == enemy_x && yy == enemy_y && d < enemy_distance)
+					enemy_distance = d;
 				if (is_wall(xx, yy))
 					continue;
 				++density;
@@ -179,7 +217,7 @@ public:
 				putc(xx == x && yy == y ? '1' : xx == enemy_x && yy == enemy_y ? '2' : wall[xx][yy] ? '#' : ' ', stderr);
 			putc('\n', stderr);
 		}
-		fputs("-------------------------------\n", stderr);
+		//fputs("-------------------------------\n", stderr);
 #endif
 		if (is_wall(x, y))		// If hit wall
 		{
@@ -195,25 +233,26 @@ public:
 		int max_neighbor_area_me = -INFINITY;
 		int min_flood_depth_me = INFINITY;
 		int max_neighbor_area_enemy = -INFINITY;
-		bool reached_enemy = false;
+		int enemy_distance = INFINITY;
 		for (int diff = 0; diff < 4; ++diff)
 		{
 			int flood_depth;
-			bool reached;
-			int this_neighbor_area = floodfill(x + x_diff[diff], y + y_diff[diff], flood_depth, reached);
-			reached_enemy = reached_enemy || reached;
+			int distance;
+			int this_neighbor_area = floodfill(x + x_diff[diff], y + y_diff[diff], flood_depth, distance);
+			if (distance < enemy_distance)
+				enemy_distance = distance;
 			if (this_neighbor_area > max_neighbor_area_me)
 				max_neighbor_area_me = this_neighbor_area;
 			if (flood_depth && flood_depth < min_flood_depth_me)
 				min_flood_depth_me = flood_depth;
-			this_neighbor_area = floodfill(enemy_x + x_diff[diff], enemy_y + y_diff[diff], flood_depth, reached);
+			this_neighbor_area = floodfill(enemy_x + x_diff[diff], enemy_y + y_diff[diff], flood_depth, distance);
 			if (this_neighbor_area > max_neighbor_area_enemy)
 				max_neighbor_area_enemy = this_neighbor_area;
 		}
 		int score = max_neighbor_area_me - max_neighbor_area_enemy;
-		if (reached_enemy)
-			score -= min_flood_depth_me;		// Prefer center if in the same region as enemy
-		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, reached_enemy, min_flood_depth_me, score);
+		if (enemy_distance != INFINITY)		// If in the same area
+			score -= min_flood_depth_me;		// Prefer center
+		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, min_flood_depth_me, score);
 		return score;
 	}
 
@@ -225,18 +264,30 @@ public:
 	int enemy_x;
 	int enemy_y;
 	int max_neighbor;
+	bool full_search;
 };
-	
-// Ignore this function. It is just handling boring stuff for you, like
-// communicating with the Tron tournament engine.
+
+void timeout_handler(int /*sig*/)
+{
+	timed_out = true;
+}
+
 int main()
 {
+	signal(SIGALRM, timeout_handler);
 	for (;;)
 	{
 		Map map;
+		timed_out = false;
+		// Setup timer
+		itimerval timeout = { { 0, 0 }, { 0, TIMEOUT } };
+		setitimer(ITIMER_REAL, &timeout, NULL);
 		AlphaBeta alphabeta(map);
-		alphabeta.alphabeta();
-		Map::make_move(alphabeta.max_neighbor + 1);
+		int move = alphabeta.run() + 1;
+		// Disable timer
+		timeout.it_value.tv_usec = 0;
+		setitimer(ITIMER_REAL, &timeout, NULL);
+		Map::make_move(move);
 	}
 	return 0;
 }
