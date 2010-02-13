@@ -21,11 +21,14 @@ static bool timed_out = false;
 class AlphaBeta
 {
 public:
-	enum { INFINITY = MAX_SIDE * MAX_SIDE };
+	enum { INFINITY = 1 << 30 };
 	enum { START_DEPTH = 12 };
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -32 };
+	enum { SCORE_DRAW = -31 };
 	enum { SCORE_WIN = INFINITY - 1 };
+	enum { NEIGHBORHOOD_EFFECT = -SCORE_DRAW + 1 };
+	enum { ENEMY_DISTANCE_EFFECT = NEIGHBORHOOD_EFFECT / 4 };
+	enum { WALL_DISTANCE_EFFECT = NEIGHBORHOOD_EFFECT / 8 };
 
 #if 0
 	struct Order
@@ -220,7 +223,7 @@ public:
 				putc(xx == x && yy == y ? '1' : xx == enemy_x && yy == enemy_y ? '2' : wall[xx][yy] ? '#' : ' ', stderr);
 			putc('\n', stderr);
 		}
-		//fputs("-------------------------------\n", stderr);
+		fputs("-------------------------------\n", stderr);
 #endif
 		if (is_wall(x, y))		// If hit wall
 		{
@@ -242,28 +245,34 @@ public:
 		{
 			int flood_depth;
 			int distance;
+			set_wall(enemy_x, enemy_y, true);
 			int this_neighbor_area = floodfill(x + x_diff[diff], y + y_diff[diff], flood_depth, distance);
+			set_wall(enemy_x, enemy_y, false);
 			if (distance < enemy_distance)
 				enemy_distance = distance;
 			if (this_neighbor_area > max_neighbor_area_me)
 				max_neighbor_area_me = this_neighbor_area;
 			if (flood_depth && flood_depth < min_flood_depth_me)
 				min_flood_depth_me = flood_depth;
+			set_wall(x, y, true);
 			this_neighbor_area = floodfill(enemy_x + x_diff[diff], enemy_y + y_diff[diff], flood_depth, distance);
+			set_wall(x, y, false);
 			if (this_neighbor_area > max_neighbor_area_enemy)
 				max_neighbor_area_enemy = this_neighbor_area;
 			if (flood_depth && flood_depth < min_flood_depth_enemy)
 				min_flood_depth_enemy = flood_depth;
 		}
-		int score = max_neighbor_area_me - max_neighbor_area_enemy;
-		if (enemy_distance == INFINITY)		// If separated
-			score *= -SCORE_DRAW - 1;
-		else		// If in the same area
+		int score = 0;
+		score += max_neighbor_area_me;		// Prefer larger neighborhood for myself
+		score -= max_neighbor_area_enemy;		// Prefer smaller neighborhood for enemy
+		score *= NEIGHBORHOOD_EFFECT;		// Prefer colliding to losing when separated
+		if (enemy_distance != INFINITY)		// If in the same area
 		{
-			score += width + height;		// Prevent preferring collision
-			score -= 2 * enemy_distance + distance(x, y, enemy_x, enemy_y);		// Prefer near enemy
-			score -= min_flood_depth_me / 2;		// Prefer center
-			score += min_flood_depth_enemy / 2;		// Prefer enemy at corners
+			score += (width + height) * ENEMY_DISTANCE_EFFECT;		// Prevent preferring collision
+			score -= enemy_distance * ENEMY_DISTANCE_EFFECT;		// Prefer near enemy
+			score -= distance(x, y, enemy_x, enemy_y) * ENEMY_DISTANCE_EFFECT;		// Prefer near enemy again!
+			score -= min_flood_depth_me * WALL_DISTANCE_EFFECT;		// Prefer center
+			score += min_flood_depth_enemy * WALL_DISTANCE_EFFECT;		// Prefer enemy at corners
 		}
 		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, min_flood_depth_me, score);
 		return score;
