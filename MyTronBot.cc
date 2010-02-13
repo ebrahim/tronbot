@@ -18,7 +18,7 @@ public:
 	enum { INFINITY = MAX_SIDE * MAX_SIDE };
 	enum { MAX_DEPTH = 8 };
 	enum { SCORE_LOSE = -256 };
-	enum { SCORE_COLLIDE = -128 };
+	enum { SCORE_DRAW = -128 };
 	enum { SCORE_WIN = 256 };
 
 #if 0
@@ -179,11 +179,16 @@ public:
 		fputs("-------------------------------\n", stderr);
 #endif
 		if (is_wall(x, y))		// If hit wall
-			return SCORE_LOSE;
+		{
+			if (is_wall(enemy_x, enemy_y))		// If enemy also hit wall
+				return SCORE_DRAW;
+			else
+				return SCORE_LOSE;
+		}
 		else if (is_wall(enemy_x, enemy_y))		// If enemy hit wall
 			return SCORE_WIN;
 		else if (x == enemy_x && y == enemy_y)		// If collided
-			return SCORE_COLLIDE;
+			return SCORE_DRAW;
 		int max_neighbor_area_me = -INFINITY;
 		int min_flood_depth_me = INFINITY;
 		int max_neighbor_area_enemy = -INFINITY;
