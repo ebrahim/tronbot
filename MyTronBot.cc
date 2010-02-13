@@ -16,10 +16,10 @@ class AlphaBeta
 {
 public:
 	enum { INFINITY = MAX_SIDE * MAX_SIDE };
-	enum { MAX_DEPTH = 9 };
-	enum { SCORE_LOSE = -256 };
-	enum { SCORE_DRAW = -128 };
-	enum { SCORE_WIN = 256 };
+	enum { MAX_DEPTH = 10 };
+	enum { SCORE_LOSE = -INFINITY + 1 };
+	enum { SCORE_DRAW = -256 };
+	enum { SCORE_WIN = INFINITY - 1 };
 
 #if 0
 	struct Order
@@ -104,6 +104,7 @@ public:
 			swap_roles();
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
+			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
 			if (alpha > my_max_score)
 			{
 				my_max_score = alpha;
@@ -175,7 +176,7 @@ public:
 		for (int yy = 0; yy < height; ++yy)
 		{
 			for (int xx = 0; xx < width; ++xx)
-				putc(x == xx && y == yy ? '.' : wall[xx][yy] ? '+' : ' ', stderr);
+				putc(xx == x && yy == y ? '1' : xx == enemy_x && yy == enemy_y ? '2' : wall[xx][yy] ? '#' : ' ', stderr);
 			putc('\n', stderr);
 		}
 		fputs("-------------------------------\n", stderr);
