@@ -204,6 +204,11 @@ public:
 		return density;
 	}
 
+	int distance(int x1, int y1, int x2, int y2)
+	{
+		return abs(x1 - x2) + abs(y1 - y2);
+	}
+
 	int evaluate()
 	{
 #if 0
@@ -256,7 +261,7 @@ public:
 		else		// If in the same area
 		{
 			score += width + height;		// Prevent preferring collision
-			score -= 3 * enemy_distance;		// Prefer near enemy
+			score -= 2 * enemy_distance + distance(x, y, enemy_x, enemy_y);		// Prefer near enemy
 			score -= min_flood_depth_me / 2;		// Prefer center
 			score += min_flood_depth_enemy / 2;		// Prefer enemy at corners
 		}
