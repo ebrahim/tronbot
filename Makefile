@@ -5,13 +5,13 @@
 # Dev-C++ to work on your code.
 
 MyTronBot: MyTronBot.o Map.o
-	g++ -o MyTronBot MyTronBot.o Map.o
+	g++ -o MyTronBot -g MyTronBot.o Map.o
 
 MyTronBot.o: MyTronBot.cc
-	g++ -c -o MyTronBot.o MyTronBot.cc
+	g++ -c -g -o MyTronBot.o MyTronBot.cc
 
 Map.o: Map.cc
-	g++ -c -o Map.o Map.cc
+	g++ -c -g -o Map.o Map.cc
 
 clean:
 	rm -f *.o MyTronBot

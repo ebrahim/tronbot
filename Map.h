@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#define MAX 256
+#define MAX_SIDE 256
 
 enum { NORTH = 1, EAST = 2, SOUTH = 3, WEST = 4 };
 
@@ -70,7 +70,7 @@ private:
 
 private:
 	// Indicates whether or not each cell in the board is passable.
-	bool map[MAX][MAX];
+	bool map[MAX_SIDE][MAX_SIDE];
 
 	// The locations of both players.
 	int player_one_x, player_one_y;
