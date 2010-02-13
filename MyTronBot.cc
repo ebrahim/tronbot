@@ -11,7 +11,7 @@
 #include <signal.h>
 #include <sys/time.h>		// For setitimer
 
-#define TIMEOUT 900000		// usec
+#define TIMEOUT 990000		// usec
 
 static int x_diff[4] = { 0, 1, 0, -1 };
 static int y_diff[4] = { -1, 0, 1, 0 };
@@ -256,9 +256,9 @@ public:
 		else		// If in the same area
 		{
 			score += width + height;		// Prevent preferring collision
-			score -= enemy_distance;		// Prefer near enemy
-			score -= min_flood_depth_me;		// Prefer center
-			score += min_flood_depth_enemy;		// Prefer enemy at corners
+			score -= 3 * enemy_distance;		// Prefer near enemy
+			score -= min_flood_depth_me / 2;		// Prefer center
+			score += min_flood_depth_enemy / 2;		// Prefer enemy at corners
 		}
 		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, min_flood_depth_me, score);
 		return score;
