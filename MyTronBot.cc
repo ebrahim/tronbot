@@ -16,7 +16,7 @@ class AlphaBeta
 {
 public:
 	enum { INFINITY = MAX_SIDE * MAX_SIDE };
-	enum { MAX_DEPTH = 8 };
+	enum { MAX_DEPTH = 9 };
 	enum { SCORE_LOSE = -256 };
 	enum { SCORE_DRAW = -128 };
 	enum { SCORE_WIN = 256 };
@@ -72,8 +72,9 @@ public:
 	int alphabeta(int depth = MAX_DEPTH, int alpha = -INFINITY, int beta = INFINITY)
 	{
 		//fprintf(stderr, "Depth: %d, Alpha: %d, Beta: %d\n", depth, alpha, beta);
-		if (!depth || is_wall(x, y) || is_wall(enemy_x, enemy_y) || x == enemy_x && y == enemy_y)		// If search in this branch ended
-			return evaluate();
+		if (depth % 2 == 0)
+			if (depth <= 0 || is_wall(x, y) || is_wall(enemy_x, enemy_y) || x == enemy_x && y == enemy_y)		// If search in this branch ended
+				return evaluate();
 		wall[x][y] = true;
 #if 0
 		Ordering ordering;
@@ -127,6 +128,7 @@ public:
 
 		static bool reached[MAX_SIDE][MAX_SIDE];
 		static Pos neighbors[MAX_SIDE * MAX_SIDE];
+
 		depth = 0;
 		reached_enemy = false;
 		if (is_wall(xx, yy))
@@ -187,7 +189,7 @@ public:
 		}
 		else if (is_wall(enemy_x, enemy_y))		// If enemy hit wall
 			return SCORE_WIN;
-		else if (x == enemy_x && y == enemy_y)		// If collided
+		if (x == enemy_x && y == enemy_y)		// If collided
 			return SCORE_DRAW;
 		int max_neighbor_area_me = -INFINITY;
 		int min_flood_depth_me = INFINITY;
