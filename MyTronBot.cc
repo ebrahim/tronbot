@@ -11,7 +11,7 @@
 #include <signal.h>
 #include <sys/time.h>		// For setitimer
 
-#define TIMEOUT 990000		// usec
+#define TIMEOUT 999000		// usec
 
 static int x_diff[4] = { 0, 1, 0, -1 };
 static int y_diff[4] = { -1, 0, 1, 0 };
@@ -240,13 +240,13 @@ public:
 		int max_neighbor_area_enemy = -INFINITY;
 		int flood_depth_enemy = 0;
 		int enemy_distance = INFINITY;
+		wall[x][y] = true;
+		wall[enemy_x][enemy_y] = true;
 		for (int diff = 0; diff < 4; ++diff)
 		{
 			int flood_depth;
 			int distance;
-			set_wall(enemy_x, enemy_y, true);
 			int this_neighbor_area = floodfill(x + x_diff[diff], y + y_diff[diff], flood_depth, distance);
-			set_wall(enemy_x, enemy_y, false);
 			if (distance < enemy_distance)
 				enemy_distance = distance;
 			if (this_neighbor_area > max_neighbor_area_me)
@@ -254,15 +254,15 @@ public:
 				max_neighbor_area_me = this_neighbor_area;
 				flood_depth_me = flood_depth;
 			}
-			set_wall(x, y, true);
 			this_neighbor_area = floodfill(enemy_x + x_diff[diff], enemy_y + y_diff[diff], flood_depth, distance);
-			set_wall(x, y, false);
 			if (this_neighbor_area > max_neighbor_area_enemy)
 			{
 				max_neighbor_area_enemy = this_neighbor_area;
 				flood_depth_enemy = flood_depth;
 			}
 		}
+		wall[x][y] = false;
+		wall[enemy_x][enemy_y] = false;
 		int score = 0;
 		if (enemy_distance == INFINITY)		// If separated
 		{
@@ -280,7 +280,7 @@ public:
 			score -= flood_depth_me;		// Prefer myself at center
 			score += flood_depth_enemy;		// Prefer enemy at corners
 		}
-		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, min_flood_depth_me, score);
+		//fprintf(stderr, "%d %d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, flood_depth_me, flood_depth_enemy, score);
 		return score;
 	}
 
@@ -303,18 +303,18 @@ void timeout_handler(int /*sig*/)
 int main()
 {
 	signal(SIGALRM, timeout_handler);
-	for (;;)
+	for (long timeout = 3 * TIMEOUT; ; timeout = TIMEOUT)
 	{
 		Map map;
 		timed_out = false;
 		// Setup timer
-		itimerval timeout = { { 0, 0 }, { 0, TIMEOUT } };
-		setitimer(ITIMER_REAL, &timeout, NULL);
+		itimerval timer = { { 0, 0 }, { 0, timeout } };
+		setitimer(ITIMER_REAL, &timer, NULL);
 		AlphaBeta alphabeta(map);
 		int move = alphabeta.run() + 1;
 		// Disable timer
-		timeout.it_value.tv_usec = 0;
-		setitimer(ITIMER_REAL, &timeout, NULL);
+		timer.it_value.tv_usec = 0;
+		setitimer(ITIMER_REAL, &timer, NULL);
 		Map::make_move(move);
 	}
 	return 0;
