@@ -25,7 +25,7 @@ public:
 	enum { INFINITY = 1 << 30 };
 	enum { START_DEPTH = 10 };
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -15 };
+	enum { SCORE_DRAW = -7 };
 	enum { SCORE_WIN = INFINITY - 1 };
 
 #if 0
@@ -160,11 +160,11 @@ public:
 		struct Pos
 		{
 			Pos() { }
-			Pos(int x, int y, int depth) : x(x), y(y), depth(depth) { }
-			int x, y, depth;
+			Pos(int x, int y) : x(x), y(y) { }
+			int x, y;
 		};
 
-		static bool reached[MAX_SIDE][MAX_SIDE];
+		static int reached[MAX_SIDE][MAX_SIDE];
 		static Pos neighbors[MAX_SIDE * MAX_SIDE];
 
 		depth = 0;
@@ -173,35 +173,41 @@ public:
 			return 0;
 		for (int x = 0; x < width; ++x)
 			for (int y = 0; y < height; ++y)
-				reached[x][y] = false;
+				reached[x][y] = 0;
 		int tail = 0;
 		int head = 0;
-		reached[xx][yy] = true;
-		neighbors[tail++] = Pos(xx, yy, 0);
+		reached[xx][yy] = 1;
+		neighbors[tail++] = Pos(xx, yy);
 		int density = 1;		// Neighborhood density score
 		do
 		{
 			int x = neighbors[head].x;
 			int y = neighbors[head].y;
-			int d = neighbors[head].depth;
-			depth += d;
+			int d = reached[x][y];
 			for (int diff = 0; diff < 4; ++diff)
 			{
 				int xx = x + x_diff[diff];
 				int yy = y + y_diff[diff];
-				if (xx == enemy_x && yy == enemy_y && d < enemy_distance)
-					enemy_distance = d;
-				if (is_wall(xx, yy))
+				if (wall[xx][yy])
 					continue;
 				++density;
 				if (reached[xx][yy])
 					continue;
 				++density;
-				reached[xx][yy] = true;
-				neighbors[tail++] = Pos(xx, yy, d + 1);
+				depth += d;
+				reached[xx][yy] = d + 1;
+				neighbors[tail++] = Pos(xx, yy);
 			}
 			++head;		// Pop
 		} while (head != tail);
+		for (int diff = 0; diff < 4; ++diff)
+		{
+			int xx = enemy_x + x_diff[diff];
+			int yy = enemy_y + y_diff[diff];
+			int d = reached[xx][yy];
+			if (d && d < enemy_distance)
+				enemy_distance = d;
+		}
 		return density;
 	}
 
