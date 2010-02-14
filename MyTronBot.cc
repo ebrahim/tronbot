@@ -27,8 +27,6 @@ public:
 	enum { SCORE_DRAW = -31 };
 	enum { SCORE_WIN = INFINITY - 1 };
 	enum { NEIGHBORHOOD_EFFECT = -SCORE_DRAW + 1 };
-	enum { ENEMY_DISTANCE_EFFECT = NEIGHBORHOOD_EFFECT / 4 };
-	enum { WALL_DISTANCE_EFFECT = NEIGHBORHOOD_EFFECT / 8 };
 
 #if 0
 	struct Order
@@ -265,14 +263,15 @@ public:
 		int score = 0;
 		score += max_neighbor_area_me;		// Prefer larger neighborhood for myself
 		score -= max_neighbor_area_enemy;		// Prefer smaller neighborhood for enemy
-		score *= NEIGHBORHOOD_EFFECT;		// Prefer colliding to losing when separated
-		if (enemy_distance != INFINITY)		// If in the same area
+		if (enemy_distance == INFINITY)		// If separated
+			score *= NEIGHBORHOOD_EFFECT;		// Prefer colliding to losing when separated
+		else		// If in the same area
 		{
-			score += (width + height) * ENEMY_DISTANCE_EFFECT;		// Prevent preferring collision
-			score -= enemy_distance * ENEMY_DISTANCE_EFFECT;		// Prefer near enemy
-			score -= distance(x, y, enemy_x, enemy_y) * ENEMY_DISTANCE_EFFECT;		// Prefer near enemy again!
-			score -= min_flood_depth_me * WALL_DISTANCE_EFFECT;		// Prefer center
-			score += min_flood_depth_enemy * WALL_DISTANCE_EFFECT;		// Prefer enemy at corners
+			score += width + height;		// Prevent preferring collision
+			score -= enemy_distance;		// Prefer near enemy
+			score -= distance(x, y, enemy_x, enemy_y);		// Prefer near enemy again!
+			score -= min_flood_depth_me;		// Prefer center
+			score += min_flood_depth_enemy;		// Prefer enemy at corners
 		}
 		//fprintf(stderr, "%d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, min_flood_depth_me, score);
 		return score;
