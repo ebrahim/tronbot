@@ -11,7 +11,8 @@
 #include <signal.h>
 #include <sys/time.h>		// For setitimer
 
-#define TIMEOUT 999000		// usec
+#define TIMEOUT 990000		// usec
+#define FIRST_TIMEOUT /*2*/990000		// usec
 
 static int x_diff[4] = { 0, 1, 0, -1 };
 static int y_diff[4] = { -1, 0, 1, 0 };
@@ -22,9 +23,9 @@ class AlphaBeta
 {
 public:
 	enum { INFINITY = 1 << 30 };
-	enum { START_DEPTH = 12 };
+	enum { START_DEPTH = 10 };
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -2047 };
+	enum { SCORE_DRAW = -15 };
 	enum { SCORE_WIN = INFINITY - 1 };
 
 #if 0
@@ -264,19 +265,14 @@ public:
 		wall[x][y] = false;
 		wall[enemy_x][enemy_y] = false;
 		int score = 0;
+		score += max_neighbor_area_me;		// Prefer larger neighborhood for myself
+		score -= max_neighbor_area_enemy;		// Prefer smaller neighborhood for enemy
 		if (enemy_distance == INFINITY)		// If separated
-		{
-			if (max_neighbor_area_me == max_neighbor_area_enemy)
-				score = SCORE_DRAW + 1;		// Try your chance instead of colliding
-			else
-				score = (max_neighbor_area_me - max_neighbor_area_enemy) * (-SCORE_DRAW + 1);
-		}
+			score *= -SCORE_DRAW + 1;		// If have got less room, prefer collision
 		else		// If in the same area
 		{
-			score += max_neighbor_area_me;		// Prefer larger neighborhood for myself
-			score -= max_neighbor_area_enemy;		// Prefer smaller neighborhood for enemy
-			score -= 4 * enemy_distance;		// Prefer near enemy
-			score -= distance(x, y, enemy_x, enemy_y) / 4;		// Prefer near enemy again!
+			score -= 8 * enemy_distance;		// Prefer near enemy
+			score -= distance(x, y, enemy_x, enemy_y);		// Prefer near enemy again!
 			score -= flood_depth_me;		// Prefer myself at center
 			score += flood_depth_enemy;		// Prefer enemy at corners
 		}
@@ -303,7 +299,7 @@ void timeout_handler(int /*sig*/)
 int main()
 {
 	signal(SIGALRM, timeout_handler);
-	for (long timeout = 3 * TIMEOUT; ; timeout = TIMEOUT)
+	for (long timeout = FIRST_TIMEOUT; ; timeout = TIMEOUT)
 	{
 		Map map;
 		timed_out = false;
