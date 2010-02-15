@@ -166,22 +166,19 @@ public:
 	int run()
 	{
 #if 0
-		alphabeta(18);
+		alphabeta(10);
 		return max_neighbor;
 #endif
-		int max_score = -INFINITY;
 		int best_neighbor = -1;
 		full_search = false;
-		for (int depth = START_DEPTH; !timed_out && !full_search; depth += 2)
+		for (int depth = START_DEPTH; !full_search; depth += 2)
 		{
 			//fprintf(stderr, "depth: %d\n", depth);
 			full_search = true;		// Assume full search, until game tree is cut
-			int alpha = alphabeta(depth);
-			if (alpha > max_score)
-			{
-				max_score = alpha;
-				best_neighbor = max_neighbor;
-			}
+			alphabeta(depth);
+			if (timed_out)
+				break;
+			best_neighbor = max_neighbor;
 		}
 		return best_neighbor;
 	}
