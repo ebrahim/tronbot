@@ -2,17 +2,25 @@
 //
 // This is the code file that you will modify in order to create your entry.
 
-#include "Map.h"
 #include <string>
 #include <list>
 #include <cstdlib>
 #include <ctime>
 #include <cstdio>
+#include <stdint.h>
+
 #include <signal.h>
 #include <sys/time.h>		// For setitimer
 
+#include "Map.h"
+
+#define MEMOIZE 1
 #define TIMEOUT 990000		// usec
 #define FIRST_TIMEOUT /*2*/990000		// usec
+
+#if MEMOIZE
+#include <ext/hash_map>
+#endif
 
 static int x_diff[4] = { 0, 1, 0, -1 };
 static int y_diff[4] = { -1, 0, 1, 0 };
@@ -23,19 +31,70 @@ class AlphaBeta
 {
 public:
 	enum { INFINITY = 1 << 30 };
+#if MEMOIZE
+	enum { START_DEPTH = 2 };
+#else
 	enum { START_DEPTH = 10 };
+#endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
 	enum { SCORE_DRAW = -7 };
 	enum { SCORE_WIN = INFINITY - 1 };
 
-#if 0
-	struct Order
+#if MEMOIZE
+	class GameState
 	{
-		Order(int neighbor, int score) : neighbor(neighbor), score(score) { }
-		bool operator<(const Order& other) { return score > other.score; }
+	public:
+		GameState()
+		{
+		}
+
+		GameState(const AlphaBeta& alphabeta)
+		: x(alphabeta.x)
+		, y(alphabeta.y)
+		, enemy_x(alphabeta.enemy_x)
+		, enemy_y(alphabeta.enemy_y)
+		{
+			for (int xx = 0; xx < MAX_SIDE; ++xx)
+				map[xx] = 0;
+			for (int xx = 0; xx < alphabeta.width; ++xx)
+				for (int yy = 0; yy < alphabeta.height; ++yy)
+					map[xx] |= alphabeta.wall[xx][yy] << yy;
+		}
+
+		size_t operator()(const GameState* const& value) const		// Hash function
+		{
+			size_t hash = 0;
+			for (int xx = 0; xx < MAX_SIDE; ++xx)
+				hash ^= value->map[xx];
+			hash ^= value->x | (uint64_t(value->y) << 32);
+			hash ^= value->enemy_x | (uint64_t(value->enemy_y) << 32);
+			return hash;
+		}
+
+		bool operator()(const GameState* const& one, const GameState* const& two) const
+		{
+			if (one->x != two->x || one->y != two->y || one->enemy_x != two->enemy_x || one->enemy_y != two->enemy_y)
+				return false;
+			for (int xx = 0; xx < MAX_SIDE; ++xx)
+				if (one->map[xx] != two->map[xx])
+					return false;
+			return true;
+		}
+
+		uint64_t map[MAX_SIDE];
+		uint32_t x, y, enemy_x, enemy_y;
+	};
+
+	typedef __gnu_cxx::hash_map<GameState*, int, GameState, GameState> EvaluationCache;
+
+	struct Heuristic
+	{
+		Heuristic() { }
+		Heuristic(int neighbor, int score) : neighbor(neighbor), score(score) { }
+		bool operator<(const Heuristic& other) { return score > other.score; }
 		int neighbor, score;
 	};
-	typedef std::list<Order> Ordering;
+	typedef std::list<Heuristic> Ordering;
 #endif
 
 	AlphaBeta(const Map& map)
@@ -88,7 +147,7 @@ public:
 		full_search = false;
 		for (int depth = START_DEPTH; !timed_out && !full_search; depth += 2)
 		{
-			//fprintf(stderr, "depth: %d\n", depth);
+			fprintf(stderr, "depth: %d\n", depth);
 			full_search = true;		// Assume full search, until game tree is cut
 			int alpha = alphabeta(depth);
 			if (alpha > max_score)
@@ -114,14 +173,15 @@ public:
 			}
 		}
 		wall[x][y] = true;
-#if 0
+		int my_max_score = -INFINITY;
+		int my_max_neighbor = -1;
+#if MEMOIZE
 		Ordering ordering;
 		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
 			x += x_diff[neighbor];
 			y += y_diff[neighbor];
-			ordering.push_back(Order(neighbor, evaluate()));
-			//fprintf(stderr, "%d\n", ordering.back().score);
+			ordering.push_back(Heuristic(neighbor, evaluate()));
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
 		}
@@ -129,12 +189,10 @@ public:
 		for (Ordering::iterator it = ordering.begin(); it != ordering.end(); ++it)
 		{
 			int neighbor = it->neighbor;
-		}
-#endif
-		int my_max_score = -INFINITY;
-		int my_max_neighbor = -1;
+#else
 		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
+#endif
 			x += x_diff[neighbor];
 			y += y_diff[neighbor];
 			swap_roles();
@@ -243,6 +301,18 @@ public:
 			return SCORE_WIN;
 		if (x == enemy_x && y == enemy_y)		// If collided
 			return SCORE_DRAW;
+
+#if MEMOIZE
+		// Memoize
+		GameState* game_state = new GameState(*this);
+		EvaluationCache::iterator cached = cache.find(game_state);
+		if (cached != cache.end())		// If already calculated
+		{
+			delete game_state;
+			return cached->second;		// Return cached value
+		}
+#endif
+
 		int max_neighbor_area_me = -INFINITY;
 		int flood_depth_me = 0;
 		int max_neighbor_area_enemy = -INFINITY;
@@ -285,8 +355,15 @@ public:
 			score += flood_depth_enemy;		// Prefer enemy at corners
 		}
 		//fprintf(stderr, "%d %d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, flood_depth_me, flood_depth_enemy, score);
+#if MEMOIZE
+		cache.insert(EvaluationCache::value_type(game_state, score));
+#endif
 		return score;
 	}
+
+#if MEMOIZE
+	static EvaluationCache cache;
+#endif
 
 	bool wall[MAX_SIDE][MAX_SIDE];
 	int width;
@@ -298,6 +375,10 @@ public:
 	int max_neighbor;
 	bool full_search;
 };
+
+#if MEMOIZE
+AlphaBeta::EvaluationCache AlphaBeta::cache;
+#endif
 
 void timeout_handler(int /*sig*/)
 {
