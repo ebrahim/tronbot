@@ -88,6 +88,7 @@ public:
 		full_search = false;
 		for (int depth = START_DEPTH; !timed_out && !full_search; depth += 2)
 		{
+			//fprintf(stderr, "depth: %d\n", depth);
 			full_search = true;		// Assume full search, until game tree is cut
 			int alpha = alphabeta(depth);
 			if (alpha > max_score)
@@ -277,6 +278,7 @@ public:
 			score *= -SCORE_DRAW + 1;		// If have got less room, prefer collision
 		else		// If in the same area
 		{
+			score *= 4;
 			score -= 8 * enemy_distance;		// Prefer near enemy
 			score -= distance(x, y, enemy_x, enemy_y);		// Prefer near enemy again!
 			score -= flood_depth_me;		// Prefer myself at center

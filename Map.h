@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#define MAX_SIDE 256
+#define MAX_SIDE 64
 
 enum { NORTH = 1, EAST = 2, SOUTH = 3, WEST = 4 };
 

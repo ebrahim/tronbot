@@ -9,10 +9,10 @@ all: MyTronBot
 MyTronBot: MyTronBot.o Map.o
 	g++ -Wall -Wextra -o MyTronBot -g MyTronBot.o Map.o
 
-MyTronBot.o: MyTronBot.cc
+MyTronBot.o: MyTronBot.cc Map.h
 	g++ -Wall -Wextra -c -g -O2 -o MyTronBot.o MyTronBot.cc
 
-Map.o: Map.cc
+Map.o: Map.cc Map.h
 	g++ -Wall -Wextra -c -g -O2 -o Map.o Map.cc
 
 clean:
