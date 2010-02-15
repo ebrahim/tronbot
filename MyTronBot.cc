@@ -3,7 +3,6 @@
 // This is the code file that you will modify in order to create your entry.
 
 #include <string>
-#include <list>
 #include <cstdlib>
 #include <ctime>
 #include <cstdio>
@@ -17,11 +16,17 @@
 #define MEMOIZE 1
 #define TIMEOUT 990000		// usec
 #define FIRST_TIMEOUT /*2*/990000		// usec
-#define CACHE_SIZE 262144
+#define CACHE_SIZE (1<<19)
 
 #if MEMOIZE
+#define _BACKWARD_BACKWARD_WARNING_H 1		// Disable warning
 #include <ext/hash_map>
-#include <map>
+#include <algorithm>
+#include <queue>
+#include <set>
+#include <vector>
+#include <deque>
+#include <list>
 #endif
 
 static int x_diff[4] = { 0, 1, 0, -1 };
@@ -108,16 +113,15 @@ public:
 	};
 
 	typedef __gnu_cxx::hash_map<GameState, int, GameState, GameState> EvaluationCache;
-	typedef std::map<uint64_t, EvaluationCache::iterator> EvaluationCacheAge;
+	typedef std::deque<EvaluationCache::iterator> EvaluationCacheAge;
 
 	struct Heuristic
 	{
-		Heuristic() { }
-		Heuristic(int neighbor, int score) : neighbor(neighbor), score(score) { }
-		bool operator<(const Heuristic& other) { return score > other.score; }
+		Heuristic(int neighbor, int score = 0) : neighbor(neighbor), score(score) { }
+		bool operator<(const Heuristic& other) const { return score > other.score; }
 		int neighbor, score;
 	};
-	typedef std::list<Heuristic> Ordering;
+	typedef std::multiset<Heuristic> Ordering;
 #endif
 
 	AlphaBeta(const Map& map)
@@ -200,15 +204,22 @@ public:
 		int my_max_neighbor = -1;
 #if MEMOIZE
 		Ordering ordering;
-		for (int neighbor = 0; neighbor < 4; ++neighbor)
+		if (depth % 2 == 0)
 		{
-			x += x_diff[neighbor];
-			y += y_diff[neighbor];
-			ordering.push_back(Heuristic(neighbor, evaluate()));
-			x -= x_diff[neighbor];
-			y -= y_diff[neighbor];
+			for (int neighbor = 0; neighbor < 4; ++neighbor)
+			{
+				x += x_diff[neighbor];
+				y += y_diff[neighbor];
+				ordering.insert(Heuristic(neighbor, evaluate(true)));
+				x -= x_diff[neighbor];
+				y -= y_diff[neighbor];
+			}
+			//ordering.sort();
+			//std::sort(ordering.begin(), ordering.end());
 		}
-		ordering.sort();
+		else
+			for (int neighbor = 0; neighbor < 4; ++neighbor)
+				ordering.insert(Heuristic(neighbor));
 		for (Ordering::iterator it = ordering.begin(); it != ordering.end(); ++it)
 		{
 			int neighbor = it->neighbor;
@@ -300,7 +311,11 @@ public:
 		return dx * dx + dy * dy;
 	}
 
-	int evaluate()
+#if MEMOIZE
+	int evaluate(bool cheap = false)
+#else
+	int evaluate(bool /*cheap*/ = false)
+#endif
 	{
 #if 0
 		fputs("-------------------------------\n", stderr);
@@ -328,13 +343,15 @@ public:
 #if MEMOIZE
 		// Memoize
 		static EvaluationCache cache(CACHE_SIZE);
-		static EvaluationCacheAge cache_age;
+		static EvaluationCacheAge cache_age(CACHE_SIZE);
 		static uint64_t cache_counter = 0;
 
 		GameState game_state(*this);
 		EvaluationCache::iterator cached = cache.find(game_state);
 		if (cached != cache.end())		// If already calculated
 			return cached->second;		// Return cached value
+		if (cheap)
+			return 0;
 #endif
 
 		int max_neighbor_area_me = -INFINITY;
@@ -381,12 +398,12 @@ public:
 		//fprintf(stderr, "%d %d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, flood_depth_me, flood_depth_enemy, score);
 #if MEMOIZE
 		std::pair<EvaluationCache::iterator, bool> res = cache.insert(EvaluationCache::value_type(game_state, score));
-		cache_age.insert(EvaluationCacheAge::value_type(cache_counter++, res.first));
-		if (cache_counter > CACHE_SIZE)
+		cache_age.push_back(res.first);
+		if (++cache_counter > CACHE_SIZE)
 		{
-			EvaluationCacheAge::iterator it = cache_age.begin();
-			cache.erase(it->second);
-			cache_age.erase(it);
+			cache.erase(cache_age.front());
+			cache_age.pop_front();
+			--cache_counter;
 		}
 #endif
 		return score;
