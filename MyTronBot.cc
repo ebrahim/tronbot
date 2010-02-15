@@ -17,9 +17,11 @@
 #define MEMOIZE 1
 #define TIMEOUT 990000		// usec
 #define FIRST_TIMEOUT /*2*/990000		// usec
+#define CACHE_SIZE 262144
 
 #if MEMOIZE
 #include <ext/hash_map>
+#include <map>
 #endif
 
 static int x_diff[4] = { 0, 1, 0, -1 };
@@ -61,6 +63,16 @@ public:
 					map[xx] |= alphabeta.wall[xx][yy] << yy;
 		}
 
+		size_t operator()(const GameState& value) const		// Hash function
+		{
+			size_t hash = 0;
+			for (int xx = 0; xx < MAX_SIDE; ++xx)
+				hash ^= value.map[xx];
+			hash ^= value.x | (uint64_t(value.y) << 32);
+			hash ^= value.enemy_x | (uint64_t(value.enemy_y) << 32);
+			return hash;
+		}
+
 		size_t operator()(const GameState* const& value) const		// Hash function
 		{
 			size_t hash = 0;
@@ -69,6 +81,16 @@ public:
 			hash ^= value->x | (uint64_t(value->y) << 32);
 			hash ^= value->enemy_x | (uint64_t(value->enemy_y) << 32);
 			return hash;
+		}
+
+		bool operator()(const GameState& one, const GameState& two) const
+		{
+			if (one.x != two.x || one.y != two.y || one.enemy_x != two.enemy_x || one.enemy_y != two.enemy_y)
+				return false;
+			for (int xx = 0; xx < MAX_SIDE; ++xx)
+				if (one.map[xx] != two.map[xx])
+					return false;
+			return true;
 		}
 
 		bool operator()(const GameState* const& one, const GameState* const& two) const
@@ -85,7 +107,8 @@ public:
 		uint32_t x, y, enemy_x, enemy_y;
 	};
 
-	typedef __gnu_cxx::hash_map<GameState*, int, GameState, GameState> EvaluationCache;
+	typedef __gnu_cxx::hash_map<GameState, int, GameState, GameState> EvaluationCache;
+	typedef std::map<uint64_t, EvaluationCache::iterator> EvaluationCacheAge;
 
 	struct Heuristic
 	{
@@ -147,7 +170,7 @@ public:
 		full_search = false;
 		for (int depth = START_DEPTH; !timed_out && !full_search; depth += 2)
 		{
-			fprintf(stderr, "depth: %d\n", depth);
+			//fprintf(stderr, "depth: %d\n", depth);
 			full_search = true;		// Assume full search, until game tree is cut
 			int alpha = alphabeta(depth);
 			if (alpha > max_score)
@@ -304,13 +327,14 @@ public:
 
 #if MEMOIZE
 		// Memoize
-		GameState* game_state = new GameState(*this);
+		static EvaluationCache cache(CACHE_SIZE);
+		static EvaluationCacheAge cache_age;
+		static uint64_t cache_counter = 0;
+
+		GameState game_state(*this);
 		EvaluationCache::iterator cached = cache.find(game_state);
 		if (cached != cache.end())		// If already calculated
-		{
-			delete game_state;
 			return cached->second;		// Return cached value
-		}
 #endif
 
 		int max_neighbor_area_me = -INFINITY;
@@ -356,14 +380,17 @@ public:
 		}
 		//fprintf(stderr, "%d %d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, flood_depth_me, flood_depth_enemy, score);
 #if MEMOIZE
-		cache.insert(EvaluationCache::value_type(game_state, score));
+		std::pair<EvaluationCache::iterator, bool> res = cache.insert(EvaluationCache::value_type(game_state, score));
+		cache_age.insert(EvaluationCacheAge::value_type(cache_counter++, res.first));
+		if (cache_counter > CACHE_SIZE)
+		{
+			EvaluationCacheAge::iterator it = cache_age.begin();
+			cache.erase(it->second);
+			cache_age.erase(it);
+		}
 #endif
 		return score;
 	}
-
-#if MEMOIZE
-	static EvaluationCache cache;
-#endif
 
 	bool wall[MAX_SIDE][MAX_SIDE];
 	int width;
@@ -375,10 +402,6 @@ public:
 	int max_neighbor;
 	bool full_search;
 };
-
-#if MEMOIZE
-AlphaBeta::EvaluationCache AlphaBeta::cache;
-#endif
 
 void timeout_handler(int /*sig*/)
 {
