@@ -29,8 +29,8 @@
 #include <list>
 #endif
 
-static int x_diff[4] = { 0, 1, 0, -1 };
-static int y_diff[4] = { -1, 0, 1, 0 };
+static const int x_diff[4] = { 0, 1, 0, -1 };
+static const int y_diff[4] = { -1, 0, 1, 0 };
 
 static bool timed_out = false;
 
@@ -44,7 +44,7 @@ public:
 	enum { START_DEPTH = 10 };
 #endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -7 };
+	enum { SCORE_DRAW = -15 };
 	enum { SCORE_WIN = INFINITY - 1 };
 
 #if MEMOIZE
@@ -56,41 +56,40 @@ public:
 		}
 
 		GameState(const AlphaBeta& alphabeta)
-		: x(alphabeta.x)
-		, y(alphabeta.y)
-		, enemy_x(alphabeta.enemy_x)
-		, enemy_y(alphabeta.enemy_y)
 		{
+			pos = alphabeta.x;
+			pos <<= 8;
+			pos |= alphabeta.y;
+			pos <<= 8;
+			pos |= alphabeta.enemy_x;
+			pos <<= 8;
+			pos |= alphabeta.enemy_y;
+			hash = pos;
 			for (int xx = 0; xx < MAX_SIDE; ++xx)
 				map[xx] = 0;
 			for (int xx = 0; xx < alphabeta.width; ++xx)
+			{
+				uint64_t col = 0;
 				for (int yy = 0; yy < alphabeta.height; ++yy)
-					map[xx] |= alphabeta.wall[xx][yy] << yy;
+					col |= alphabeta.wall[xx][yy] << yy;
+				map[xx] = col;
+				hash ^= col;
+			}
 		}
 
 		size_t operator()(const GameState& value) const		// Hash function
 		{
-			size_t hash = 0;
-			for (int xx = 0; xx < MAX_SIDE; ++xx)
-				hash ^= value.map[xx];
-			hash ^= value.x | (uint64_t(value.y) << 32);
-			hash ^= value.enemy_x | (uint64_t(value.enemy_y) << 32);
-			return hash;
+			return value.hash;
 		}
 
 		size_t operator()(const GameState* const& value) const		// Hash function
 		{
-			size_t hash = 0;
-			for (int xx = 0; xx < MAX_SIDE; ++xx)
-				hash ^= value->map[xx];
-			hash ^= value->x | (uint64_t(value->y) << 32);
-			hash ^= value->enemy_x | (uint64_t(value->enemy_y) << 32);
-			return hash;
+			return value->hash;
 		}
 
 		bool operator()(const GameState& one, const GameState& two) const
 		{
-			if (one.x != two.x || one.y != two.y || one.enemy_x != two.enemy_x || one.enemy_y != two.enemy_y)
+			if (one.pos != two.pos)
 				return false;
 			for (int xx = 0; xx < MAX_SIDE; ++xx)
 				if (one.map[xx] != two.map[xx])
@@ -100,7 +99,7 @@ public:
 
 		bool operator()(const GameState* const& one, const GameState* const& two) const
 		{
-			if (one->x != two->x || one->y != two->y || one->enemy_x != two->enemy_x || one->enemy_y != two->enemy_y)
+			if (one->pos != two->pos)
 				return false;
 			for (int xx = 0; xx < MAX_SIDE; ++xx)
 				if (one->map[xx] != two->map[xx])
@@ -109,7 +108,8 @@ public:
 		}
 
 		uint64_t map[MAX_SIDE];
-		uint32_t x, y, enemy_x, enemy_y;
+		uint64_t pos;
+		uint64_t hash;
 	};
 
 	typedef __gnu_cxx::hash_map<GameState, int, GameState, GameState> EvaluationCache;
@@ -117,11 +117,9 @@ public:
 
 	struct Heuristic
 	{
-		Heuristic(int neighbor, int score = 0) : neighbor(neighbor), score(score) { }
 		bool operator<(const Heuristic& other) const { return score > other.score; }
 		int neighbor, score;
 	};
-	typedef std::multiset<Heuristic> Ordering;
 #endif
 
 	AlphaBeta(const Map& map)
@@ -200,26 +198,29 @@ public:
 		int my_max_score = -INFINITY;
 		int my_max_neighbor = -1;
 #if MEMOIZE
-		Ordering ordering;
+		Heuristic heuristics[4];
 		if (depth % 2 == 0)
 		{
 			for (int neighbor = 0; neighbor < 4; ++neighbor)
 			{
 				x += x_diff[neighbor];
 				y += y_diff[neighbor];
-				ordering.insert(Heuristic(neighbor, evaluate(true)));
+				heuristics[neighbor].neighbor = neighbor;
+				heuristics[neighbor].score = evaluate(true);
 				x -= x_diff[neighbor];
 				y -= y_diff[neighbor];
 			}
-			//ordering.sort();
-			//std::sort(ordering.begin(), ordering.end());
+			std::sort(heuristics, heuristics + 4);
 		}
 		else
 			for (int neighbor = 0; neighbor < 4; ++neighbor)
-				ordering.insert(Heuristic(neighbor));
-		for (Ordering::iterator it = ordering.begin(); it != ordering.end(); ++it)
+			{
+				heuristics[neighbor].neighbor = neighbor;
+				heuristics[neighbor].score = 0;
+			}
+		for (int i = 0; i < 4; ++i)
 		{
-			int neighbor = it->neighbor;
+			int neighbor = heuristics[i].neighbor;
 #else
 		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
