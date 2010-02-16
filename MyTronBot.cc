@@ -1,6 +1,13 @@
-// MyTronBot.cc
-//
-// This is the code file that you will modify in order to create your entry.
+/****************************/
+/*    In the name of God    */
+/****************************/
+/* Tron bot                 */
+/****************************/
+/* By ebrahim               */
+/* http://ebrahim.ir        */
+/* ebrahim at mohammadi.ir  */
+/* License: public domain   */
+/****************************/
 
 #include <string>
 #include <cstdlib>
@@ -13,23 +20,20 @@
 
 #include "Map.h"
 
-#define MEMOIZE 0
+#define MEMOIZE 1
 #define TIMEOUT 990000		// usec
 #define FIRST_TIMEOUT /*2*/990000		// usec
 
 #if MEMOIZE
 
 #define CACHE_SIZE (1<<19)
+#define KEEP_GAME_STATE 1
+
+#include <algorithm>
 
 #define _BACKWARD_BACKWARD_WARNING_H 1		// Disable warning
 #include <ext/hash_map>
-#include <map>
-#include <algorithm>
-#include <queue>
-#include <set>
-#include <vector>
 #include <deque>
-#include <list>
 
 #endif
 
@@ -55,9 +59,15 @@ public:
 	class GameState
 	{
 	public:
-		GameState()
+		GameState() { }
+#if 0
+		: pos(0)
+		, hash(0)
 		{
+			for (int xx = 0; xx < MAX_SIDE; ++xx)
+				map[xx] = 0;
 		}
+#endif
 
 		GameState(const AlphaBeta& alphabeta)
 		: pos(0)
@@ -98,22 +108,23 @@ public:
 			hash ^= pos;		// Add new pos to hash
 		}
 
+#if 0
 		bool operator<(const GameState& other) const
 		{
 			for (int xx = 0; xx < AlphaBeta::width; ++xx)
+			{
 				if (map[xx] < other.map[xx])
 					return true;
+				if (map[xx] > other.map[xx])
+					return false;
+			}
 			return pos < other.pos;
 		}
+#endif
 
 		size_t operator()(const GameState& value) const		// Hash function
 		{
 			return value.hash;
-		}
-
-		size_t operator()(const GameState* const& value) const		// Hash function
-		{
-			return value->hash;
 		}
 
 		bool operator()(const GameState& one, const GameState& two) const
@@ -122,16 +133,6 @@ public:
 				return false;
 			for (int xx = 0; xx < AlphaBeta::width; ++xx)
 				if (one.map[xx] != two.map[xx])
-					return false;
-			return true;
-		}
-
-		bool operator()(const GameState* const& one, const GameState* const& two) const
-		{
-			if (one->pos != two->pos)
-				return false;
-			for (int xx = 0; xx < AlphaBeta::width; ++xx)
-				if (one->map[xx] != two->map[xx])
 					return false;
 			return true;
 		}
@@ -164,7 +165,7 @@ public:
 		for (int xx = 0; xx < width; ++xx)
 			for (int yy = 0; yy < height; ++yy)
 				wall[xx][yy] = map.is_wall(xx, yy);
-#if MEMOIZE
+#if KEEP_GAME_STATE
 		game_state = GameState(*this);
 #endif
 	}
@@ -228,26 +229,26 @@ public:
 				return evaluate();
 			}
 		}
-		wall[x][y] = true;
-#if MEMOIZE
-		game_state.set(x, y, true);
-#endif
 		int my_max_score = -INFINITY;
 		int my_max_neighbor = -1;
+		wall[x][y] = true;
+#if KEEP_GAME_STATE
+		game_state.set(x, y, true);
+#endif
 #if MEMOIZE
 		Heuristic heuristics[4];
 		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
 			x += x_diff[neighbor];
 			y += y_diff[neighbor];
-#if MEMOIZE
+#if KEEP_GAME_STATE
 			game_state.update_pos(*this);
 #endif
 			heuristics[neighbor].neighbor = neighbor;
 			heuristics[neighbor].score = evaluate(true);
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
-#if MEMOIZE
+#if KEEP_GAME_STATE
 			game_state.update_pos(*this);
 #endif
 		}
@@ -262,14 +263,14 @@ public:
 			x += x_diff[neighbor];
 			y += y_diff[neighbor];
 			swap_roles();
-#if MEMOIZE
+#if KEEP_GAME_STATE
 			game_state.update_pos(*this);
 #endif
 			alpha = std::max(alpha, -alphabeta(depth - 1, -beta, -alpha));
 			swap_roles();
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
-#if MEMOIZE
+#if KEEP_GAME_STATE
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
@@ -283,10 +284,11 @@ public:
 		}
 		max_neighbor = my_max_neighbor;
 		wall[x][y] = false;
-#if MEMOIZE
+#if KEEP_GAME_STATE
 		game_state.set(x, y, false);
-		//if (depth % 2 == 0)
-			cache_score(alpha);		// Update cached heuristic score with minimaxed one
+#endif
+#if MEMOIZE
+		cache_score(alpha);		// Update cached heuristic score with minimaxed one
 #endif
 		return alpha;
 	}
@@ -294,6 +296,9 @@ public:
 #if MEMOIZE
 	void cache_score(int score)
 	{
+#if !KEEP_GAME_STATE
+		GameState game_state(*this);
+#endif
 		EvaluationCache::iterator cached = cache.find(game_state);
 		if (cached == cache.end())
 		{
@@ -404,6 +409,9 @@ public:
 
 #if MEMOIZE
 		// Memoize
+#if !KEEP_GAME_STATE
+		GameState game_state(*this);
+#endif
 		EvaluationCache::iterator cached = cache.find(game_state);
 		if (cached != cache.end())		// If already calculated
 			return cached->second;		// Return cached value
@@ -466,7 +474,7 @@ public:
 #endif
 
 	bool wall[MAX_SIDE][MAX_SIDE];
-#if MEMOIZE
+#if KEEP_GAME_STATE
 	GameState game_state;
 #endif
 	int x, y;
@@ -503,6 +511,10 @@ int main()
 		timer.it_value.tv_usec = 0;
 		setitimer(ITIMER_REAL, &timer, NULL);
 		Map::make_move(move);
+#if 0 && MEMOIZE
+		if (AlphaBeta::cache.size() >= CACHE_SIZE)
+			AlphaBeta::cache.clear();
+#endif
 	}
 	return 0;
 }
