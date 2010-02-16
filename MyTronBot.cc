@@ -22,18 +22,22 @@
 
 #define MEMOIZE 1
 #define TIMEOUT 990000		// usec
-#define FIRST_TIMEOUT /*2*/990000		// usec
+#define FIRST_TIMEOUT 2800000		// usec
 
 #if MEMOIZE
 
-#define CACHE_SIZE (1<<19)
-#define KEEP_GAME_STATE 1
+#define CACHE_SIZE (1<<20)
+#define KEEP_GAME_STATE 0
+#define CACHE_RANDOM_DROP 1
 
 #include <algorithm>
 
 #define _BACKWARD_BACKWARD_WARNING_H 1		// Disable warning
 #include <ext/hash_map>
+
+#if !CACHE_RANDOM_DROP
 #include <deque>
+#endif
 
 #endif
 
@@ -59,15 +63,13 @@ public:
 	class GameState
 	{
 	public:
-		GameState() { }
-#if 0
+		GameState()
 		: pos(0)
 		, hash(0)
 		{
 			for (int xx = 0; xx < MAX_SIDE; ++xx)
 				map[xx] = 0;
 		}
-#endif
 
 		GameState(const AlphaBeta& alphabeta)
 		: pos(0)
@@ -108,7 +110,6 @@ public:
 			hash ^= pos;		// Add new pos to hash
 		}
 
-#if 0
 		bool operator<(const GameState& other) const
 		{
 			for (int xx = 0; xx < AlphaBeta::width; ++xx)
@@ -120,7 +121,6 @@ public:
 			}
 			return pos < other.pos;
 		}
-#endif
 
 		size_t operator()(const GameState& value) const		// Hash function
 		{
@@ -143,7 +143,9 @@ public:
 	};
 
 	typedef __gnu_cxx::hash_map<GameState, int, GameState, GameState> EvaluationCache;
+#if !CACHE_RANDOM_DROP
 	typedef std::deque<EvaluationCache::iterator> EvaluationCacheAge;
+#endif
 
 	struct Heuristic
 	{
@@ -301,6 +303,12 @@ public:
 		GameState game_state(*this);
 #endif
 		EvaluationCache::iterator cached = cache.find(game_state);
+#if CACHE_RANDOM_DROP
+		if (cached == cache.end())
+			cache.insert(EvaluationCache::value_type(game_state, score));
+		else
+			cached->second = score;
+#else
 		if (cached == cache.end())
 		{
 			std::pair<EvaluationCache::iterator, bool> res = cache.insert(EvaluationCache::value_type(game_state, score));
@@ -313,6 +321,7 @@ public:
 		}
 		else
 			cached->second = score;
+#endif
 	}
 #endif
 
@@ -471,7 +480,9 @@ public:
 	static int width, height;
 #if MEMOIZE
 	static EvaluationCache cache;
+#if !CACHE_RANDOM_DROP
 	static EvaluationCacheAge cache_age;
+#endif
 #endif
 
 	bool wall[MAX_SIDE][MAX_SIDE];
@@ -488,7 +499,9 @@ int AlphaBeta::width = 0;
 int AlphaBeta::height = 0;
 #if MEMOIZE
 AlphaBeta::EvaluationCache AlphaBeta::cache(CACHE_SIZE);
+#if !CACHE_RANDOM_DROP
 AlphaBeta::EvaluationCacheAge AlphaBeta::cache_age;
+#endif
 #endif
 
 void timeout_handler(int /*sig*/)
@@ -504,7 +517,7 @@ int main()
 		Map map;
 		timed_out = false;
 		// Setup timer
-		itimerval timer = { { 0, 0 }, { 0, timeout } };
+		itimerval timer = { { 0, 0 }, { timeout / 1000000, timeout % 1000000} };
 		setitimer(ITIMER_REAL, &timer, NULL);
 		AlphaBeta alphabeta(map);
 		int move = alphabeta.run() + 1;
@@ -512,9 +525,14 @@ int main()
 		timer.it_value.tv_usec = 0;
 		setitimer(ITIMER_REAL, &timer, NULL);
 		Map::make_move(move);
-#if 0 && MEMOIZE
+#if MEMOIZE && CACHE_RANDOM_DROP
 		if (AlphaBeta::cache.size() >= CACHE_SIZE)
-			AlphaBeta::cache.clear();
+		{
+			AlphaBeta::EvaluationCache::iterator begin = AlphaBeta::cache.begin();
+			for (int i = 0; i < CACHE_SIZE / 2; ++i)		// Remove half of cache randomly
+				++begin;
+			AlphaBeta::cache.erase(begin, AlphaBeta::cache.end());
+		}
 #endif
 	}
 	return 0;
