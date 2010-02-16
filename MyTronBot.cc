@@ -232,10 +232,10 @@ public:
 		int my_max_score = -INFINITY;
 		int my_max_neighbor = -1;
 		wall[x][y] = true;
+#if MEMOIZE
 #if KEEP_GAME_STATE
 		game_state.set(x, y, true);
 #endif
-#if MEMOIZE
 		Heuristic heuristics[4];
 		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
@@ -284,11 +284,12 @@ public:
 		}
 		max_neighbor = my_max_neighbor;
 		wall[x][y] = false;
+#if MEMOIZE
 #if KEEP_GAME_STATE
 		game_state.set(x, y, false);
 #endif
-#if MEMOIZE
-		cache_score(alpha);		// Update cached heuristic score with minimaxed one
+		if (depth % 2 == 0)
+			cache_score(alpha);		// Update cached heuristic score with minimaxed one
 #endif
 		return alpha;
 	}
