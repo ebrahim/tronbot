@@ -4,18 +4,15 @@
 # don't worry about it. Just use Visual C++ Express Edition or
 # Dev-C++ to work on your code.
 
-CXXFLAGS=-Wall -Wextra -Wno-deprecated -O2 -g
+CXXFLAGS=-Wall -Wextra -Wno-deprecated -O2 -g #-pg
 
 all: MyTronBot
 
-MyTronBot: MyTronBot.o Map.o
-	g++ -o MyTronBot -g MyTronBot.o Map.o
+MyTronBot: MyTronBot.o
+	g++ $(CXXFLAGS) -o MyTronBot MyTronBot.o
 
 MyTronBot.o: MyTronBot.cc Map.h
 	g++ $(CXXFLAGS) -c -o MyTronBot.o MyTronBot.cc
-
-Map.o: Map.cc Map.h
-	g++ $(CXXFLAGS) -c -o Map.o Map.cc
 
 clean:
 	rm -f *.o MyTronBot

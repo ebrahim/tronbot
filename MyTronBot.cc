@@ -13,20 +13,24 @@
 
 #include "Map.h"
 
-#define MEMOIZE 1
+#define MEMOIZE 0
 #define TIMEOUT 990000		// usec
 #define FIRST_TIMEOUT /*2*/990000		// usec
-#define CACHE_SIZE (1<<19)
 
 #if MEMOIZE
+
+#define CACHE_SIZE (1<<19)
+
 #define _BACKWARD_BACKWARD_WARNING_H 1		// Disable warning
 #include <ext/hash_map>
+#include <map>
 #include <algorithm>
 #include <queue>
 #include <set>
 #include <vector>
 #include <deque>
 #include <list>
+
 #endif
 
 static const int x_diff[4] = { 0, 1, 0, -1 };
@@ -39,9 +43,9 @@ class AlphaBeta
 public:
 	enum { INFINITY = 1 << 30 };
 #if MEMOIZE
-	enum { START_DEPTH = 2 };
+	enum { START_DEPTH = 0 };
 #else
-	enum { START_DEPTH = 10 };
+	enum { START_DEPTH = 8 };
 #endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
 	enum { SCORE_DRAW = -15 };
@@ -56,7 +60,34 @@ public:
 		}
 
 		GameState(const AlphaBeta& alphabeta)
+		: pos(0)
+		, hash(0)
 		{
+			update_pos(alphabeta);
+			for (int xx = 0; xx < AlphaBeta::width; ++xx)
+			{
+				uint64_t col = 0;
+				for (int yy = AlphaBeta::height - 1; yy >= 0 ; --yy)
+				{
+					col <<= 1;
+					col |= alphabeta.wall[xx][yy];
+				}
+				map[xx] = col;
+				hash ^= col;
+			}
+		}
+
+		void set(int x, int y, bool value)
+		{
+			hash ^= map[x];		// Remove old col from hash
+			map[x] &= ~(uint64_t(1) << y);		// Reset bit to 0
+			map[x] |= uint64_t(value) << y;		// Set it to value
+			hash ^= map[x];		// Add new col to hash
+		}
+
+		void update_pos(const AlphaBeta& alphabeta)
+		{
+			hash ^= pos;		// Remove old pos from hash
 			pos = alphabeta.x;
 			pos <<= 8;
 			pos |= alphabeta.y;
@@ -64,17 +95,15 @@ public:
 			pos |= alphabeta.enemy_x;
 			pos <<= 8;
 			pos |= alphabeta.enemy_y;
-			hash = pos;
-			for (int xx = 0; xx < MAX_SIDE; ++xx)
-				map[xx] = 0;
-			for (int xx = 0; xx < alphabeta.width; ++xx)
-			{
-				uint64_t col = 0;
-				for (int yy = 0; yy < alphabeta.height; ++yy)
-					col |= alphabeta.wall[xx][yy] << yy;
-				map[xx] = col;
-				hash ^= col;
-			}
+			hash ^= pos;		// Add new pos to hash
+		}
+
+		bool operator<(const GameState& other) const
+		{
+			for (int xx = 0; xx < AlphaBeta::width; ++xx)
+				if (map[xx] < other.map[xx])
+					return true;
+			return pos < other.pos;
 		}
 
 		size_t operator()(const GameState& value) const		// Hash function
@@ -91,7 +120,7 @@ public:
 		{
 			if (one.pos != two.pos)
 				return false;
-			for (int xx = 0; xx < MAX_SIDE; ++xx)
+			for (int xx = 0; xx < AlphaBeta::width; ++xx)
 				if (one.map[xx] != two.map[xx])
 					return false;
 			return true;
@@ -101,7 +130,7 @@ public:
 		{
 			if (one->pos != two->pos)
 				return false;
-			for (int xx = 0; xx < MAX_SIDE; ++xx)
+			for (int xx = 0; xx < AlphaBeta::width; ++xx)
 				if (one->map[xx] != two->map[xx])
 					return false;
 			return true;
@@ -123,18 +152,21 @@ public:
 #endif
 
 	AlphaBeta(const Map& map)
-	: width(map.width)
-	, height(map.height)
-	, x(map.my_x())
+	: x(map.my_x())
 	, y(map.my_y())
 	, enemy_x(map.opponent_x())
 	, enemy_y(map.opponent_y())
 	, max_neighbor(0)
 	, full_search(false)
 	{
+		width = map.width;
+		height = map.height;
 		for (int xx = 0; xx < width; ++xx)
 			for (int yy = 0; yy < height; ++yy)
 				wall[xx][yy] = map.is_wall(xx, yy);
+#if MEMOIZE
+		game_state = GameState(*this);
+#endif
 	}
 
 	bool is_wall(int xx, int yy)
@@ -171,11 +203,11 @@ public:
 		full_search = false;
 		for (int depth = START_DEPTH; !full_search; depth += 2)
 		{
-			//fprintf(stderr, "depth: %d\n", depth);
 			full_search = true;		// Assume full search, until game tree is cut
 			alphabeta(depth);
 			if (timed_out)
 				break;
+			//fprintf(stderr, "depth: %d\n", depth);
 			best_neighbor = max_neighbor;
 		}
 		return best_neighbor;
@@ -184,10 +216,12 @@ public:
 	int alphabeta(int depth, int alpha = -INFINITY, int beta = INFINITY)
 	{
 		//fprintf(stderr, "Depth: %d, Alpha: %d, Beta: %d\n", depth, alpha, beta);
-		if (depth % 2 == 0)
+		if (depth % 2 == 0)		// If both players have moved
 		{
-			if (is_wall(x, y) || is_wall(enemy_x, enemy_y) || (x == enemy_x && y == enemy_y) || timed_out)		// If search in this branch ended
+			if (is_wall(x, y) || is_wall(enemy_x, enemy_y) || (x == enemy_x && y == enemy_y))		// If search in this branch ended
 				return evaluate();
+			else if (timed_out)
+				return -INFINITY;
 			else if (depth <= 0)
 			{
 				full_search = false;
@@ -195,29 +229,29 @@ public:
 			}
 		}
 		wall[x][y] = true;
+#if MEMOIZE
+		game_state.set(x, y, true);
+#endif
 		int my_max_score = -INFINITY;
 		int my_max_neighbor = -1;
 #if MEMOIZE
 		Heuristic heuristics[4];
-		if (depth % 2 == 0)
+		for (int neighbor = 0; neighbor < 4; ++neighbor)
 		{
-			for (int neighbor = 0; neighbor < 4; ++neighbor)
-			{
-				x += x_diff[neighbor];
-				y += y_diff[neighbor];
-				heuristics[neighbor].neighbor = neighbor;
-				heuristics[neighbor].score = evaluate(true);
-				x -= x_diff[neighbor];
-				y -= y_diff[neighbor];
-			}
-			std::sort(heuristics, heuristics + 4);
+			x += x_diff[neighbor];
+			y += y_diff[neighbor];
+#if MEMOIZE
+			game_state.update_pos(*this);
+#endif
+			heuristics[neighbor].neighbor = neighbor;
+			heuristics[neighbor].score = evaluate(true);
+			x -= x_diff[neighbor];
+			y -= y_diff[neighbor];
+#if MEMOIZE
+			game_state.update_pos(*this);
+#endif
 		}
-		else
-			for (int neighbor = 0; neighbor < 4; ++neighbor)
-			{
-				heuristics[neighbor].neighbor = neighbor;
-				heuristics[neighbor].score = 0;
-			}
+		std::sort(heuristics, heuristics + 4);
 		for (int i = 0; i < 4; ++i)
 		{
 			int neighbor = heuristics[i].neighbor;
@@ -228,10 +262,16 @@ public:
 			x += x_diff[neighbor];
 			y += y_diff[neighbor];
 			swap_roles();
+#if MEMOIZE
+			game_state.update_pos(*this);
+#endif
 			alpha = std::max(alpha, -alphabeta(depth - 1, -beta, -alpha));
 			swap_roles();
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
+#if MEMOIZE
+			game_state.update_pos(*this);
+#endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
 			if (alpha > my_max_score)
 			{
@@ -243,8 +283,32 @@ public:
 		}
 		max_neighbor = my_max_neighbor;
 		wall[x][y] = false;
+#if MEMOIZE
+		game_state.set(x, y, false);
+		//if (depth % 2 == 0)
+			cache_score(alpha);		// Update cached heuristic score with minimaxed one
+#endif
 		return alpha;
 	}
+
+#if MEMOIZE
+	void cache_score(int score)
+	{
+		EvaluationCache::iterator cached = cache.find(game_state);
+		if (cached == cache.end())
+		{
+			std::pair<EvaluationCache::iterator, bool> res = cache.insert(EvaluationCache::value_type(game_state, score));
+			cache_age.push_back(res.first);
+			if (cache_age.size() >= CACHE_SIZE)
+			{
+				cache.erase(cache_age.front());
+				cache_age.pop_front();
+			}
+		}
+		else
+			cached->second = score;
+	}
+#endif
 
 	int floodfill(int xx, int yy, int& depth, int& enemy_distance)
 	{
@@ -262,9 +326,9 @@ public:
 		enemy_distance = INFINITY;
 		if (is_wall(xx, yy))
 			return 0;
-		for (int x = 0; x < width; ++x)
-			for (int y = 0; y < height; ++y)
-				reached[x][y] = 0;
+		for (int xxx = 0; xxx < width; ++xxx)
+			for (int yyy = 0; yyy < height; ++yyy)
+				reached[xxx][yyy] = 0;
 		int tail = 0;
 		int head = 0;
 		reached[xx][yy] = 1;
@@ -312,7 +376,7 @@ public:
 #if MEMOIZE
 	int evaluate(bool cheap = false)
 #else
-	int evaluate(bool /*cheap*/ = false)
+	int evaluate()
 #endif
 	{
 #if 0
@@ -326,25 +390,20 @@ public:
 		}
 		fputs("-------------------------------\n", stderr);
 #endif
-		if (is_wall(x, y))		// If hit wall
+		if (wall[x][y])		// If hit wall
 		{
-			if (is_wall(enemy_x, enemy_y))		// If enemy also hit wall
+			if (wall[enemy_x][enemy_y])		// If enemy also hit wall
 				return SCORE_DRAW;
 			else
 				return SCORE_LOSE;
 		}
-		else if (is_wall(enemy_x, enemy_y))		// If enemy hit wall
+		else if (wall[enemy_x][enemy_y])		// If enemy hit wall
 			return SCORE_WIN;
 		if (x == enemy_x && y == enemy_y)		// If collided
 			return SCORE_DRAW;
 
 #if MEMOIZE
 		// Memoize
-		static EvaluationCache cache(CACHE_SIZE);
-		static EvaluationCacheAge cache_age(CACHE_SIZE);
-		static uint64_t cache_counter = 0;
-
-		GameState game_state(*this);
 		EvaluationCache::iterator cached = cache.find(game_state);
 		if (cached != cache.end())		// If already calculated
 			return cached->second;		// Return cached value
@@ -395,28 +454,33 @@ public:
 		}
 		//fprintf(stderr, "%d %d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, flood_depth_me, flood_depth_enemy, score);
 #if MEMOIZE
-		std::pair<EvaluationCache::iterator, bool> res = cache.insert(EvaluationCache::value_type(game_state, score));
-		cache_age.push_back(res.first);
-		if (++cache_counter > CACHE_SIZE)
-		{
-			cache.erase(cache_age.front());
-			cache_age.pop_front();
-			--cache_counter;
-		}
+		cache_score(score);
 #endif
 		return score;
 	}
 
+	static int width, height;
+#if MEMOIZE
+	static EvaluationCache cache;
+	static EvaluationCacheAge cache_age;
+#endif
+
 	bool wall[MAX_SIDE][MAX_SIDE];
-	int width;
-	int height;
-	int x;
-	int y;
-	int enemy_x;
-	int enemy_y;
+#if MEMOIZE
+	GameState game_state;
+#endif
+	int x, y;
+	int enemy_x, enemy_y;
 	int max_neighbor;
 	bool full_search;
 };
+
+int AlphaBeta::width = 0;
+int AlphaBeta::height = 0;
+#if MEMOIZE
+AlphaBeta::EvaluationCache AlphaBeta::cache(CACHE_SIZE);
+AlphaBeta::EvaluationCacheAge AlphaBeta::cache_age;
+#endif
 
 void timeout_handler(int /*sig*/)
 {
