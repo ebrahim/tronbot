@@ -21,13 +21,15 @@
 #include "Map.h"
 
 #define MEMOIZE 1
+#define LOG 0
+
 #define TIMEOUT 990000		// usec
 #define FIRST_TIMEOUT 2800000		// usec
 
 #if MEMOIZE
 
 #define CACHE_SIZE (1<<20)
-#define KEEP_GAME_STATE 0
+#define KEEP_GAME_STATE 1
 #define CACHE_RANDOM_DROP 1
 
 #include <algorithm>
@@ -39,6 +41,11 @@
 #include <deque>
 #endif
 
+#endif
+
+#if 0
+FILE* set_file = fopen("set.txt", "w");
+FILE* get_file = fopen("get.txt", "w");
 #endif
 
 static const int x_diff[4] = { 0, 1, 0, -1 };
@@ -88,6 +95,33 @@ public:
 				hash ^= col;
 			}
 		}
+
+#if 0
+		void print(FILE* file)
+		{
+			int x1 = pos >> 24;
+			int y1 = (pos >> 16) & 0xFF;
+			int x2 = (pos >> 8) & 0xFF;
+			int y2 = pos & 0xFF;
+			fprintf(file, "%.16llx: %d %d %d %d\n", hash, x1, y1, x2, y2);
+			for (int yy = 0; yy <= AlphaBeta::height ; ++yy)
+			{
+				for (int xx = 0; xx < AlphaBeta::width; ++xx)
+				{
+					if (xx == x1 && yy == y1)
+						putc('1', file);
+					else if (xx == x2 && yy == y2)
+						putc('2', file);
+					else if ((map[xx] >> yy) & 1)
+						putc('#', file);
+					else
+						putc(' ', file);
+				}
+				putc('\n', file);
+			}
+			putc('\n', file);
+		}
+#endif
 
 		void set(int x, int y, bool value)
 		{
@@ -143,13 +177,14 @@ public:
 	};
 
 	typedef __gnu_cxx::hash_map<GameState, int, GameState, GameState> EvaluationCache;
+	//typedef std::map<GameState, int> EvaluationCache;
 #if !CACHE_RANDOM_DROP
 	typedef std::deque<EvaluationCache::iterator> EvaluationCacheAge;
 #endif
 
 	struct Heuristic
 	{
-		bool operator<(const Heuristic& other) const { return score > other.score; }
+		bool operator<(const Heuristic& other) const { return score < other.score; }
 		int neighbor, score;
 	};
 #endif
@@ -207,10 +242,18 @@ public:
 		for (int depth = START_DEPTH; !full_search; depth += 2)
 		{
 			full_search = true;		// Assume full search, until game tree is cut
+#if LOG
+			total  = 0;
+			miss = 0;
+			eval = 0;
+#endif
 			alphabeta(depth);
 			if (timed_out)
 				break;
+#if LOG
 			//fprintf(stderr, "depth: %d\n", depth);
+			fprintf(stderr, "depth: %d, total: %d, hit: %d, eval: %d\n", depth, total, total - miss, eval);
+#endif
 			best_neighbor = max_neighbor;
 		}
 		return best_neighbor;
@@ -221,10 +264,8 @@ public:
 		//fprintf(stderr, "Depth: %d, Alpha: %d, Beta: %d\n", depth, alpha, beta);
 		if (depth % 2 == 0)		// If both players have moved
 		{
-			if (is_wall(x, y) || is_wall(enemy_x, enemy_y) || (x == enemy_x && y == enemy_y))		// If search in this branch ended
+			if (wall[x][y] || wall[enemy_x][enemy_y] || (x == enemy_x && y == enemy_y) || timed_out)		// If search in this branch ended
 				return evaluate();
-			else if (timed_out)
-				return -INFINITY;
 			else if (depth <= 0)
 			{
 				full_search = false;
@@ -243,11 +284,13 @@ public:
 		{
 			x += x_diff[neighbor];
 			y += y_diff[neighbor];
+			swap_roles();
 #if KEEP_GAME_STATE
 			game_state.update_pos(*this);
 #endif
 			heuristics[neighbor].neighbor = neighbor;
-			heuristics[neighbor].score = evaluate(true);
+			heuristics[neighbor].score = depth % 2 == 1 ? evaluate(true) : -neighbor;
+			swap_roles();
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
 #if KEEP_GAME_STATE
@@ -302,6 +345,7 @@ public:
 #if !KEEP_GAME_STATE
 		GameState game_state(*this);
 #endif
+		//game_state.print(set_file);
 		EvaluationCache::iterator cached = cache.find(game_state);
 #if CACHE_RANDOM_DROP
 		if (cached == cache.end())
@@ -422,11 +466,25 @@ public:
 #if !KEEP_GAME_STATE
 		GameState game_state(*this);
 #endif
+#if LOG
+		if (cheap)
+			++total;
+#endif
 		EvaluationCache::iterator cached = cache.find(game_state);
 		if (cached != cache.end())		// If already calculated
 			return cached->second;		// Return cached value
+#if LOG
+		if (cheap)
+		{
+			//game_state.print(get_file);
+			++miss;
+		}
+#endif
 		if (cheap)
 			return 0;
+#if LOG
+		++eval;
+#endif
 #endif
 
 		int max_neighbor_area_me = -INFINITY;
@@ -493,6 +551,9 @@ public:
 	int enemy_x, enemy_y;
 	int max_neighbor;
 	bool full_search;
+#if LOG
+	int total, miss, eval;
+#endif
 };
 
 int AlphaBeta::width = 0;
