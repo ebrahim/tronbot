@@ -195,6 +195,8 @@ public:
 	, enemy_x(map.opponent_x())
 	, enemy_y(map.opponent_y())
 	, max_neighbor(0)
+	, max_depth(0)
+	, best_depth(0)
 	, full_search(false)
 	{
 		width = map.width;
@@ -238,6 +240,7 @@ public:
 		return max_neighbor;
 #endif
 		int best_neighbor = -1;
+		best_depth = 0;
 		full_search = false;
 		for (int depth = START_DEPTH; !full_search; depth += 2)
 		{
@@ -247,6 +250,7 @@ public:
 			miss = 0;
 			eval = 0;
 #endif
+			max_depth = depth;
 			alphabeta(depth);
 			if (timed_out)
 				break;
@@ -319,10 +323,11 @@ public:
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
-			if (alpha > my_max_score)
+			if (alpha > my_max_score || (alpha == my_max_score && max_depth - depth > best_depth))
 			{
 				my_max_score = alpha;
 				my_max_neighbor = neighbor;
+				best_depth = max_depth - depth;
 			}
 			if (beta <= alpha)		// Beta cut-off
 				break;
@@ -550,6 +555,8 @@ public:
 	int x, y;
 	int enemy_x, enemy_y;
 	int max_neighbor;
+	int max_depth;
+	int best_depth;
 	bool full_search;
 #if LOG
 	int total, miss, eval;
