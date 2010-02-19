@@ -23,14 +23,14 @@
 #define MEMOIZE 1
 #define LOG 0
 
-#define TIMEOUT 990000		// usec
-#define FIRST_TIMEOUT 2800000		// usec
+#define TIMEOUT 985000		// usec
+#define FIRST_TIMEOUT 2700000		// usec
 
 #if MEMOIZE
 
 #define CACHE_SIZE (1<<20)
 #define KEEP_GAME_STATE 1
-#define CACHE_RANDOM_DROP 1
+#define CACHE_RANDOM_DROP 0
 
 #include <algorithm>
 
@@ -58,12 +58,12 @@ class AlphaBeta
 public:
 	enum { INFINITY = 1 << 30 };
 #if MEMOIZE
-	enum { START_DEPTH = 0 };
+	enum { START_DEPTH = 2 };
 #else
 	enum { START_DEPTH = 8 };
 #endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -15 };
+	enum { SCORE_DRAW = -31 };
 	enum { SCORE_WIN = INFINITY - 1 };
 
 #if MEMOIZE
@@ -194,9 +194,6 @@ public:
 	, y(map.my_y())
 	, enemy_x(map.opponent_x())
 	, enemy_y(map.opponent_y())
-	, max_neighbor(0)
-	, max_depth(0)
-	, best_depth(0)
 	, full_search(false)
 	{
 		width = map.width;
@@ -235,36 +232,34 @@ public:
 
 	int run()
 	{
-#if 0
-		alphabeta(10);
-		return max_neighbor;
-#endif
-		int best_neighbor = -1;
-		best_depth = 0;
+		int move = -1;
 		full_search = false;
 		for (int depth = START_DEPTH; !full_search; depth += 2)
 		{
+			int best_neighbor;
+			int best_depth;
 			full_search = true;		// Assume full search, until game tree is cut
 #if LOG
 			total  = 0;
 			miss = 0;
 			eval = 0;
 #endif
-			max_depth = depth;
-			alphabeta(depth);
+			alphabeta(depth, -INFINITY, INFINITY, best_neighbor, best_depth);
 			if (timed_out)
 				break;
 #if LOG
 			//fprintf(stderr, "depth: %d\n", depth);
 			fprintf(stderr, "depth: %d, total: %d, hit: %d, eval: %d\n", depth, total, total - miss, eval);
 #endif
-			best_neighbor = max_neighbor;
+			move = best_neighbor;
 		}
-		return best_neighbor;
+		return move;
 	}
 
-	int alphabeta(int depth, int alpha = -INFINITY, int beta = INFINITY)
+	int alphabeta(int depth, int alpha, int beta, int& best_neighbor, int& best_depth)
 	{
+		best_neighbor = -1;
+		best_depth = depth;
 		//fprintf(stderr, "Depth: %d, Alpha: %d, Beta: %d\n", depth, alpha, beta);
 		if (depth % 2 == 0)		// If both players have moved
 		{
@@ -277,7 +272,6 @@ public:
 			}
 		}
 		int my_max_score = -INFINITY;
-		int my_max_neighbor = -1;
 		wall[x][y] = true;
 #if MEMOIZE
 #if KEEP_GAME_STATE
@@ -315,7 +309,8 @@ public:
 #if KEEP_GAME_STATE
 			game_state.update_pos(*this);
 #endif
-			alpha = std::max(alpha, -alphabeta(depth - 1, -beta, -alpha));
+			int child_best_neighbor, child_best_depth;
+			alpha = std::max(alpha, -alphabeta(depth - 1, -beta, -alpha, child_best_neighbor, child_best_depth));
 			swap_roles();
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
@@ -323,16 +318,15 @@ public:
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
-			if (alpha > my_max_score || (alpha == my_max_score && max_depth - depth > best_depth))
+			if (alpha > my_max_score || (alpha == my_max_score && child_best_depth < best_depth))
 			{
 				my_max_score = alpha;
-				my_max_neighbor = neighbor;
-				best_depth = max_depth - depth;
+				best_neighbor = neighbor;
+				best_depth = child_best_depth;
 			}
 			if (beta <= alpha)		// Beta cut-off
 				break;
 		}
-		max_neighbor = my_max_neighbor;
 		wall[x][y] = false;
 #if MEMOIZE
 #if KEEP_GAME_STATE
@@ -555,8 +549,6 @@ public:
 	int x, y;
 	int enemy_x, enemy_y;
 	int max_neighbor;
-	int max_depth;
-	int best_depth;
 	bool full_search;
 #if LOG
 	int total, miss, eval;
