@@ -522,15 +522,13 @@ public:
 		{
 			if (score > 0)
 				score += SCORE_SEPARATED;
-			else
+			else if (score < 0)
 				score -= SCORE_SEPARATED;		// If have got less room, prefer collision
 		}
 		else		// If in the same area
 		{
 			score *= 8;
-			score += MAX_SIDE * MAX_SIDE - 8 * enemy_distance;		// Prefer near enemy
-			score += distance(0, 0, MAX_SIDE, MAX_SIDE) - distance(x, y, enemy_x, enemy_y);		// Prefer near enemy again!
-			score += MAX_SIDE * MAX_SIDE;
+			score -= 16 * enemy_distance;		// Prefer near enemy
 			score -= flood_depth_me;		// Prefer myself at center
 			score += flood_depth_enemy;		// Prefer enemy at corners
 		}
