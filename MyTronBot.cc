@@ -63,8 +63,9 @@ public:
 	enum { START_DEPTH = 8 };
 #endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -31 };
+	enum { SCORE_DRAW = 0 };
 	enum { SCORE_WIN = INFINITY - 1 };
+	enum { SCORE_SEPARATED = INFINITY / 2 };
 
 #if MEMOIZE
 	class GameState
@@ -318,7 +319,7 @@ public:
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
-			if (alpha > my_max_score || (alpha == my_max_score && child_best_depth < best_depth))
+			if (alpha > my_max_score || (alpha == my_max_score && alpha <= SCORE_DRAW && child_best_depth < best_depth))
 			{
 				my_max_score = alpha;
 				best_neighbor = neighbor;
@@ -518,12 +519,18 @@ public:
 		score += max_neighbor_area_me;		// Prefer larger neighborhood for myself
 		score -= max_neighbor_area_enemy;		// Prefer smaller neighborhood for enemy
 		if (enemy_distance == INFINITY)		// If separated
-			score *= -SCORE_DRAW + 1;		// If have got less room, prefer collision
+		{
+			if (score > 0)
+				score += SCORE_SEPARATED;
+			else
+				score -= SCORE_SEPARATED;		// If have got less room, prefer collision
+		}
 		else		// If in the same area
 		{
-			score *= 4;
-			score -= 8 * enemy_distance;		// Prefer near enemy
-			score -= distance(x, y, enemy_x, enemy_y);		// Prefer near enemy again!
+			score *= 8;
+			score += MAX_SIDE * MAX_SIDE - 8 * enemy_distance;		// Prefer near enemy
+			score += distance(0, 0, MAX_SIDE, MAX_SIDE) - distance(x, y, enemy_x, enemy_y);		// Prefer near enemy again!
+			score += MAX_SIDE * MAX_SIDE;
 			score -= flood_depth_me;		// Prefer myself at center
 			score += flood_depth_enemy;		// Prefer enemy at corners
 		}

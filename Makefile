@@ -1,4 +1,4 @@
-CXXFLAGS=-Wall -Wextra -Wno-deprecated -O2 -g #-pg
+CXXFLAGS=-Wall -Wextra -Wno-deprecated -O3 -g # -funroll-loops -pg
 
 all: MyTronBot
 
