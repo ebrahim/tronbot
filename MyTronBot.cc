@@ -97,14 +97,14 @@ public:
 			}
 		}
 
-#if 0
+#if LOG
 		void print(FILE* file)
 		{
 			int x1 = pos >> 24;
 			int y1 = (pos >> 16) & 0xFF;
 			int x2 = (pos >> 8) & 0xFF;
 			int y2 = pos & 0xFF;
-			fprintf(file, "%.16llx: %d %d %d %d\n", hash, x1, y1, x2, y2);
+			fprintf(file, "%.16llx: %d %d %d %d\n", (unsigned long long) hash, x1, y1, x2, y2);
 			for (int yy = 0; yy <= AlphaBeta::height ; ++yy)
 			{
 				for (int xx = 0; xx < AlphaBeta::width; ++xx)
@@ -250,7 +250,7 @@ public:
 				break;
 #if LOG
 			//fprintf(stderr, "depth: %d\n", depth);
-			fprintf(stderr, "depth: %d, total: %d, hit: %d, eval: %d\n", depth, total, total - miss, eval);
+			fprintf(stderr, "depth: %d, total: %d, hit: %d, eval: %d, decision: %d\n", depth, total, total - miss, eval, best_neighbor + 1);
 #endif
 			move = best_neighbor;
 		}
@@ -319,7 +319,7 @@ public:
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
-			if (alpha > my_max_score || (alpha == my_max_score && alpha <= SCORE_DRAW && child_best_depth < best_depth))
+			if (alpha > my_max_score/* || (alpha == my_max_score && alpha <= SCORE_DRAW && child_best_depth < best_depth)*/)
 			{
 				my_max_score = alpha;
 				best_neighbor = neighbor;
@@ -345,7 +345,6 @@ public:
 #if !KEEP_GAME_STATE
 		GameState game_state(*this);
 #endif
-		//game_state.print(set_file);
 		EvaluationCache::iterator cached = cache.find(game_state);
 #if CACHE_RANDOM_DROP
 		if (cached == cache.end())
@@ -355,6 +354,10 @@ public:
 #else
 		if (cached == cache.end())
 		{
+#if 0
+			game_state.print(set_file);
+			fprintf(set_file, "%+d\n", score);
+#endif
 			std::pair<EvaluationCache::iterator, bool> res = cache.insert(EvaluationCache::value_type(game_state, score));
 			cache_age.push_back(res.first);
 			if (cache_age.size() >= CACHE_SIZE)
@@ -527,8 +530,8 @@ public:
 		}
 		else		// If in the same area
 		{
-			score *= 8;
-			score -= 16 * enemy_distance;		// Prefer near enemy
+			score *= 2;
+			score -= 8 * enemy_distance;		// Prefer near enemy
 			score -= flood_depth_me;		// Prefer myself at center
 			score += flood_depth_enemy;		// Prefer enemy at corners
 		}
