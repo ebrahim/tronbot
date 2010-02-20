@@ -28,7 +28,7 @@
 
 #if MEMOIZE
 
-#define CACHE_SIZE (1<<20)
+#define CACHE_SIZE ((1<<22) + (1<<21))
 #define KEEP_GAME_STATE 1
 #define CACHE_RANDOM_DROP 0
 
@@ -233,7 +233,7 @@ public:
 
 	int run()
 	{
-		int move = -1;
+		int move = 0;
 		full_search = false;
 		for (int depth = START_DEPTH; !full_search; depth += 2)
 		{
@@ -245,12 +245,13 @@ public:
 			miss = 0;
 			eval = 0;
 #endif
-			alphabeta(depth, -INFINITY, INFINITY, best_neighbor, best_depth);
-			if (timed_out)
+			int score = alphabeta(depth, -INFINITY, INFINITY, best_neighbor, best_depth);
+			if (score == SCORE_LOSE || timed_out)
 				break;
 #if LOG
 			//fprintf(stderr, "depth: %d\n", depth);
-			fprintf(stderr, "depth: %d, total: %d, hit: %d, eval: %d, decision: %d\n", depth, total, total - miss, eval, best_neighbor + 1);
+			fprintf(stderr, "depth: %d,\ttotal: %d,\thit: %d,\teval: %d,\tdecision: %d,\tscore: %d\n",
+					depth, total, total - miss, eval, best_neighbor + 1, score);
 #endif
 			move = best_neighbor;
 		}
@@ -319,7 +320,7 @@ public:
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
-			if (alpha > my_max_score/* || (alpha == my_max_score && alpha <= SCORE_DRAW && child_best_depth < best_depth)*/)
+			if (alpha > my_max_score || (alpha == my_max_score && alpha <= SCORE_DRAW && child_best_depth < best_depth))
 			{
 				my_max_score = alpha;
 				best_neighbor = neighbor;
@@ -329,12 +330,12 @@ public:
 				break;
 		}
 		wall[x][y] = false;
-#if MEMOIZE
 #if KEEP_GAME_STATE
 		game_state.set(x, y, false);
 #endif
+#if 0 && MEMOIZE
 		if (depth % 2 == 0)
-			cache_score(alpha);		// Update cached heuristic score with minimaxed one
+			cache_score(alpha);
 #endif
 		return alpha;
 	}
