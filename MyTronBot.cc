@@ -28,7 +28,7 @@
 
 #if MEMOIZE
 
-#define CACHE_SIZE ((1<<19) + (1<<19))
+#define CACHE_SIZE ((1<<18) + (1<<18))
 #define KEEP_GAME_STATE 1
 #define CACHE_RANDOM_DROP 0
 
@@ -63,7 +63,7 @@ public:
 	enum { START_DEPTH = 8 };
 #endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = 0 };
+	enum { SCORE_DRAW = -32 };
 	enum { SCORE_WIN = INFINITY - 1 };
 	enum { SCORE_SEPARATED = INFINITY / 2 };
 
@@ -532,13 +532,13 @@ public:
 		{
 			if (score > 0)
 				score += SCORE_SEPARATED;
-			else if (score < 0)
+			else
 				score -= SCORE_SEPARATED;		// If have got less room, prefer collision
 		}
 		else		// If in the same area
 		{
-			score *= 2;
-			score -= 8 * enemy_distance;		// Prefer near enemy
+			//score *= 2;
+			score -= 16 * enemy_distance;		// Prefer near enemy
 			score -= flood_depth_me;		// Prefer myself at center
 			score += flood_depth_enemy;		// Prefer enemy at corners
 		}
