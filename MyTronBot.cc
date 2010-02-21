@@ -65,7 +65,7 @@ public:
 	enum { SCORE_LOSE = -INFINITY + 1 };
 	enum { SCORE_DRAW = 0 };
 	enum { SCORE_WIN = INFINITY - 1 };
-	enum { SCORE_SEPARATED = MAX_SIDE };
+	enum { SCORE_SEPARATED = INFINITY / 2 };
 
 #if MEMOIZE
 	class GameState
