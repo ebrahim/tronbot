@@ -23,12 +23,12 @@
 #define MEMOIZE 1
 #define LOG 0
 
-#define TIMEOUT 985000		// usec
+#define TIMEOUT 2985000		// usec
 #define FIRST_TIMEOUT 2750000		// usec
 
 #if MEMOIZE
 
-#define CACHE_SIZE ((1<<18) + (1<<18))
+#define CACHE_SIZE ((1<<22) + (1<<21))
 #define KEEP_GAME_STATE 1
 #define CACHE_RANDOM_DROP 0
 
@@ -63,9 +63,10 @@ public:
 	enum { START_DEPTH = 8 };
 #endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = -32 };
+	enum { SCORE_DRAW = 0 };
 	enum { SCORE_WIN = INFINITY - 1 };
-	enum { SCORE_SEPARATED = INFINITY / 2 };
+	enum { SCORE_SEPARATED = 128 };
+	enum { SCORE_UNSEPARATED = 18 };
 
 #if MEMOIZE
 	class GameState
@@ -405,7 +406,7 @@ public:
 		int density = 0;		// Neighborhood density score
 		do
 		{
-			++density;
+			density += 4;
 			int x = neighbors[head].x;
 			int y = neighbors[head].y;
 			int d = reached[x][y];
@@ -529,18 +530,13 @@ public:
 		score += max_neighbor_area_me;		// Prefer larger neighborhood for myself
 		score -= max_neighbor_area_enemy;		// Prefer smaller neighborhood for enemy
 		if (enemy_distance == INFINITY)		// If separated
-		{
-			if (score > 0)
-				score += SCORE_SEPARATED;
-			else
-				score -= SCORE_SEPARATED;		// If have got less room, prefer collision
-		}
+			score *= SCORE_SEPARATED;
 		else		// If in the same area
 		{
-			//score *= 2;
-			score -= 16 * enemy_distance;		// Prefer near enemy
-			score -= flood_depth_me;		// Prefer myself at center
-			score += flood_depth_enemy;		// Prefer enemy at corners
+			score *= 1;
+			score -= enemy_distance;		// Prefer near enemy
+			score -= SCORE_UNSEPARATED * flood_depth_me;		// Prefer myself at center
+			score += SCORE_UNSEPARATED * flood_depth_enemy;		// Prefer enemy at corners
 		}
 		//fprintf(stderr, "%d %d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, flood_depth_me, flood_depth_enemy, score);
 #if MEMOIZE
