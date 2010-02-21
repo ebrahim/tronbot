@@ -65,8 +65,8 @@ public:
 	enum { SCORE_LOSE = -INFINITY + 1 };
 	enum { SCORE_DRAW = 0 };
 	enum { SCORE_WIN = INFINITY - 1 };
-	enum { SCORE_SEPARATED = 128 };
-	enum { SCORE_UNSEPARATED = 18 };
+	enum { SCORE_SEPARATED = 4 };
+	enum { SCORE_UNSEPARATED = 1 };
 
 #if MEMOIZE
 	class GameState
@@ -270,10 +270,12 @@ public:
 	{
 		best_neighbor = -1;
 		best_depth = depth;
+		if (timed_out)
+			return -INFINITY;
 		//fprintf(stderr, "Depth: %d, Alpha: %d, Beta: %d\n", depth, alpha, beta);
 		if (depth % 2 == 0)		// If both players have moved
 		{
-			if (wall[x][y] || wall[enemy_x][enemy_y] || (x == enemy_x && y == enemy_y) || timed_out)		// If search in this branch ended
+			if (wall[x][y] || wall[enemy_x][enemy_y] || (x == enemy_x && y == enemy_y))		// If search in this branch ended
 				return evaluate();
 			else if (depth <= 0)
 			{
@@ -341,7 +343,7 @@ public:
 		game_state.set(x, y, false);
 #endif
 #if MEMOIZE
-		if (depth % 2 == 0)
+		if (depth % 2 == 0 && !timed_out)
 			cache_score(alpha);
 #endif
 		return alpha;
@@ -394,8 +396,6 @@ public:
 
 		depth = 0;
 		enemy_distance = INFINITY;
-		if (is_wall(xx, yy))
-			return 0;
 		for (int xxx = 0; xxx < width; ++xxx)
 			for (int yyy = 0; yyy < height; ++yyy)
 				reached[xxx][yyy] = 0;
@@ -498,45 +498,30 @@ public:
 #endif
 #endif
 
-		int max_neighbor_area_me = -INFINITY;
-		int flood_depth_me = 0;
-		int max_neighbor_area_enemy = -INFINITY;
-		int flood_depth_enemy = 0;
-		int enemy_distance = INFINITY;
 		wall[x][y] = true;
 		wall[enemy_x][enemy_y] = true;
-		for (int diff = 0; diff < 4; ++diff)
-		{
-			int flood_depth;
-			int distance;
-			int this_neighbor_area = floodfill(x + x_diff[diff], y + y_diff[diff], flood_depth, distance);
-			if (distance < enemy_distance)
-				enemy_distance = distance;
-			if (this_neighbor_area > max_neighbor_area_me)
-			{
-				max_neighbor_area_me = this_neighbor_area;
-				flood_depth_me = flood_depth;
-			}
-			this_neighbor_area = floodfill(enemy_x + x_diff[diff], enemy_y + y_diff[diff], flood_depth, distance);
-			if (this_neighbor_area > max_neighbor_area_enemy)
-			{
-				max_neighbor_area_enemy = this_neighbor_area;
-				flood_depth_enemy = flood_depth;
-			}
-		}
+
+		int our_distance = INFINITY;
+		int my_flood_depth = INFINITY, your_flood_depth = 0;
+		// Order is important because of our_distance
+		int your_neighborhood = floodfill(enemy_x, enemy_y, your_flood_depth, our_distance);
+		int my_neighborhood = floodfill(x, y, my_flood_depth, our_distance);
+
 		wall[x][y] = false;
 		wall[enemy_x][enemy_y] = false;
+
 		int score = 0;
-		score += max_neighbor_area_me;		// Prefer larger neighborhood for myself
-		score -= max_neighbor_area_enemy;		// Prefer smaller neighborhood for enemy
-		if (enemy_distance == INFINITY)		// If separated
+		if (our_distance == INFINITY)		// If separated
+		{
+			score += my_neighborhood;		// Prefer larger neighborhood for myself
+			score -= your_neighborhood;		// Prefer smaller neighborhood for enemy
 			score *= SCORE_SEPARATED;
+		}
 		else		// If in the same area
 		{
-			score *= 1;
-			score -= enemy_distance;		// Prefer near enemy
-			score -= SCORE_UNSEPARATED * flood_depth_me;		// Prefer myself at center
-			score += SCORE_UNSEPARATED * flood_depth_enemy;		// Prefer enemy at corners
+			//score -= our_distance;		// Prefer near enemy
+			score -= SCORE_UNSEPARATED * my_flood_depth;		// Prefer myself at center
+			score += SCORE_UNSEPARATED * your_flood_depth;		// Prefer enemy at corners
 		}
 		//fprintf(stderr, "%d %d %d %d %d %d\n", max_neighbor_area_me, max_neighbor_area_enemy, enemy_distance, flood_depth_me, flood_depth_enemy, score);
 #if MEMOIZE
