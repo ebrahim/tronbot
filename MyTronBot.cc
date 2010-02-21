@@ -23,7 +23,7 @@
 #define MEMOIZE 1
 #define LOG 0
 
-#define TIMEOUT 2985000		// usec
+#define TIMEOUT 985000		// usec
 #define FIRST_TIMEOUT 2750000		// usec
 
 #if MEMOIZE
