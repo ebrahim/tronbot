@@ -24,11 +24,11 @@
 #define LOG 0
 
 #define TIMEOUT 985000		// usec
-#define FIRST_TIMEOUT 2700000		// usec
+#define FIRST_TIMEOUT 2750000		// usec
 
 #if MEMOIZE
 
-#define CACHE_SIZE ((1<<22) + (1<<21))
+#define CACHE_SIZE ((1<<19) + (1<<19))
 #define KEEP_GAME_STATE 1
 #define CACHE_RANDOM_DROP 0
 
@@ -65,7 +65,7 @@ public:
 	enum { SCORE_LOSE = -INFINITY + 1 };
 	enum { SCORE_DRAW = 0 };
 	enum { SCORE_WIN = INFINITY - 1 };
-	enum { SCORE_SEPARATED = INFINITY / 2 };
+	enum { SCORE_SEPARATED = MAX_SIDE };
 
 #if MEMOIZE
 	class GameState
@@ -93,19 +93,19 @@ public:
 					col |= alphabeta.wall[xx][yy];
 				}
 				map[xx] = col;
-				hash ^= col;
+				hash_column(xx);
 			}
 		}
 
 #if LOG
 		void print(FILE* file)
 		{
-			int x1 = pos >> 24;
+			int x1 = (pos >> 24) & 0xFF;
 			int y1 = (pos >> 16) & 0xFF;
 			int x2 = (pos >> 8) & 0xFF;
 			int y2 = pos & 0xFF;
 			fprintf(file, "%.16llx: %d %d %d %d\n", (unsigned long long) hash, x1, y1, x2, y2);
-			for (int yy = 0; yy <= AlphaBeta::height ; ++yy)
+			for (int yy = 0; yy < AlphaBeta::height ; ++yy)
 			{
 				for (int xx = 0; xx < AlphaBeta::width; ++xx)
 				{
@@ -120,16 +120,20 @@ public:
 				}
 				putc('\n', file);
 			}
-			putc('\n', file);
 		}
 #endif
 
+		void hash_column(uint8_t x)
+		{
+			hash ^= (map[x] << x) | (map[x] >> (64 - x));
+		}
+
 		void set(int x, int y, bool value)
 		{
-			hash ^= map[x];		// Remove old col from hash
+			hash_column(x);		// Remove old column from hash
 			map[x] &= ~(uint64_t(1) << y);		// Reset bit to 0
 			map[x] |= uint64_t(value) << y;		// Set it to value
-			hash ^= map[x];		// Add new col to hash
+			hash_column(x);		// Add new column to hash
 		}
 
 		void update_pos(const AlphaBeta& alphabeta)
@@ -142,6 +146,7 @@ public:
 			pos |= alphabeta.enemy_x;
 			pos <<= 8;
 			pos |= alphabeta.enemy_y;
+			pos |= pos << 32;
 			hash ^= pos;		// Add new pos to hash
 		}
 
@@ -244,14 +249,16 @@ public:
 			total  = 0;
 			miss = 0;
 			eval = 0;
-#endif
 			int score = alphabeta(depth, -INFINITY, INFINITY, best_neighbor, best_depth);
-			if (score == SCORE_LOSE || timed_out)
+#else
+			alphabeta(depth, -INFINITY, INFINITY, best_neighbor, best_depth);
+#endif
+			if (timed_out)
 				break;
 #if LOG
 			//fprintf(stderr, "depth: %d\n", depth);
-			fprintf(stderr, "depth: %d,\ttotal: %d,\thit: %d,\teval: %d,\tdecision: %d,\tscore: %d\n",
-					depth, total, total - miss, eval, best_neighbor + 1, score);
+			fprintf(stderr, "depth: %d,\ttotal: %d,\thit: %d,\teval: %d,\tbest depth: %d,\tdecision: %d,\tscore: %d\n",
+					depth, total, total - miss, eval, best_depth, best_neighbor + 1, score);
 #endif
 			move = best_neighbor;
 		}
@@ -273,7 +280,6 @@ public:
 				return evaluate();
 			}
 		}
-		int my_max_score = -INFINITY;
 		wall[x][y] = true;
 #if MEMOIZE
 #if KEEP_GAME_STATE
@@ -289,7 +295,7 @@ public:
 			game_state.update_pos(*this);
 #endif
 			heuristics[neighbor].neighbor = neighbor;
-			heuristics[neighbor].score = depth % 2 == 1 ? evaluate(true) : -neighbor;
+			heuristics[neighbor].score = depth % 2 ? evaluate(true) : -neighbor;
 			swap_roles();
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
@@ -312,7 +318,7 @@ public:
 			game_state.update_pos(*this);
 #endif
 			int child_best_neighbor, child_best_depth;
-			alpha = std::max(alpha, -alphabeta(depth - 1, -beta, -alpha, child_best_neighbor, child_best_depth));
+			int new_alpha = -alphabeta(depth - 1, -beta, -alpha, child_best_neighbor, child_best_depth);
 			swap_roles();
 			x -= x_diff[neighbor];
 			y -= y_diff[neighbor];
@@ -320,20 +326,20 @@ public:
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
-			if (alpha > my_max_score || (alpha == my_max_score && alpha <= SCORE_DRAW && child_best_depth < best_depth))
+			if (new_alpha > alpha || (new_alpha == alpha && alpha <= SCORE_DRAW && child_best_depth < best_depth))
 			{
-				my_max_score = alpha;
+				alpha = new_alpha;
 				best_neighbor = neighbor;
 				best_depth = child_best_depth;
 			}
-			if (beta <= alpha)		// Beta cut-off
+			if (depth % 2 && beta <= alpha)		// Beta cut-off
 				break;
 		}
 		wall[x][y] = false;
 #if KEEP_GAME_STATE
 		game_state.set(x, y, false);
 #endif
-#if 0 && MEMOIZE
+#if MEMOIZE
 		if (depth % 2 == 0)
 			cache_score(alpha);
 #endif
@@ -396,9 +402,10 @@ public:
 		int head = 0;
 		reached[xx][yy] = 1;
 		neighbors[tail++] = Pos(xx, yy);
-		int density = 1;		// Neighborhood density score
+		int density = 0;		// Neighborhood density score
 		do
 		{
+			++density;
 			int x = neighbors[head].x;
 			int y = neighbors[head].y;
 			int d = reached[x][y];
@@ -411,7 +418,6 @@ public:
 				++density;
 				if (reached[xx][yy])
 					continue;
-				++density;
 				depth += d;
 				reached[xx][yy] = d + 1;
 				neighbors[tail++] = Pos(xx, yy);
