@@ -23,8 +23,8 @@
 #define MEMOIZE 1
 #define LOG 0
 
-#define TIMEOUT 985000		// usec
-#define FIRST_TIMEOUT 2750000		// usec
+#define TIMEOUT 990000		// usec
+#define FIRST_TIMEOUT 2850000		// usec
 
 #if MEMOIZE
 
@@ -63,9 +63,9 @@ public:
 	enum { START_DEPTH = 8 };
 #endif
 	enum { SCORE_LOSE = -INFINITY + 1 };
-	enum { SCORE_DRAW = 0 };
+	enum { SCORE_DRAW = -1 };
 	enum { SCORE_WIN = INFINITY - 1 };
-	enum { SCORE_SEPARATED = 4 };
+	enum { SCORE_SEPARATED = 2 };
 	enum { SCORE_UNSEPARATED = 1 };
 
 #if MEMOIZE
@@ -329,13 +329,13 @@ public:
 			game_state.update_pos(*this);
 #endif
 			//fprintf(stderr, "depth: %d, my_max_score: %d, alpha: %d, beta: %d\n", depth, my_max_score, alpha, beta);
-			if (new_alpha > alpha || (new_alpha == alpha && alpha <= SCORE_DRAW && child_best_depth < best_depth))
+			if (new_alpha > alpha || (new_alpha == alpha && alpha == SCORE_LOSE && child_best_depth < best_depth))
 			{
 				alpha = new_alpha;
 				best_neighbor = neighbor;
 				best_depth = child_best_depth;
 			}
-			if (depth % 2 && beta <= alpha)		// Beta cut-off
+			if (beta <= alpha && depth % 2)		// Beta cut-off
 				break;
 		}
 		wall[x][y] = false;
@@ -406,23 +406,27 @@ public:
 		int density = 0;		// Neighborhood density score
 		do
 		{
-			density += 4;
 			int x = neighbors[head].x;
 			int y = neighbors[head].y;
 			int d = reached[x][y];
+			int open_neighbors = 0;
 			for (int diff = 0; diff < 4; ++diff)
 			{
 				int xx = x + x_diff[diff];
 				int yy = y + y_diff[diff];
 				if (wall[xx][yy])
 					continue;
-				++density;
+				++open_neighbors;
 				if (reached[xx][yy])
 					continue;
 				depth += d;
 				reached[xx][yy] = d + 1;
 				neighbors[tail++] = Pos(xx, yy);
 			}
+			if (open_neighbors > 2)
+				density += 10;
+			else if (open_neighbors > 1)
+				density += 9;
 			++head;		// Pop
 		} while (head != tail);
 		for (int diff = 0; diff < 4; ++diff)
