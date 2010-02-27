@@ -21,14 +21,14 @@
 #include "Map.h"
 
 #define MEMOIZE 1
-#define LOG 0
+#define LOG 1
 
 #define TIMEOUT 990000		// usec
 #define FIRST_TIMEOUT 2850000		// usec
 
 #if MEMOIZE
 
-#define CACHE_SIZE ((1<<22) + (1<<21))
+#define CACHE_SIZE ((1<<19) + (1<<18))
 #define KEEP_GAME_STATE 1
 #define CACHE_RANDOM_DROP 0
 

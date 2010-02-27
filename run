@@ -1,0 +1,3 @@
+#!/bin/sh
+
+java -jar engine/Tron.jar ${1:-maps/empty-room.txt} ./MyTronBot ./iraq/MyTronBot 0 25
